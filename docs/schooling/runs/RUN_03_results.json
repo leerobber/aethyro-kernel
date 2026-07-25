@@ -1,0 +1,60 @@
+{
+  "run_id": 3,
+  "overall_pass": true,
+  "phases": [
+    {
+      "phase": 0,
+      "score": 1.000000,
+      "passed": true,
+      "attempt": 1,
+      "items_pass": 22,
+      "items_total": 22,
+      "dataset_id": "docs_corpus_v1_n23_train18_hold5"
+    },
+    {
+      "phase": 1,
+      "score": 1.000000,
+      "passed": true,
+      "attempt": 1,
+      "items_pass": 16,
+      "items_total": 16,
+      "dataset_id": "docs_corpus_v1_n23_train18_hold5"
+    },
+    {
+      "phase": 2,
+      "score": 1.000000,
+      "passed": true,
+      "attempt": 1,
+      "items_pass": 18,
+      "items_total": 18,
+      "dataset_id": "docs_corpus_v1_n23_train18_hold5"
+    },
+    {
+      "phase": 3,
+      "score": 1.000000,
+      "passed": true,
+      "attempt": 1,
+      "items_pass": 7,
+      "items_total": 7,
+      "dataset_id": "docs_corpus_v1_n23_train18_hold5"
+    },
+    {
+      "phase": 4,
+      "score": 0.760502,
+      "passed": true,
+      "attempt": 1,
+      "items_pass": 8,
+      "items_total": 8,
+      "dataset_id": "docs_corpus_v1_n23_train18_hold5"
+    },
+    {
+      "phase": 5,
+      "score": 0.756897,
+      "passed": true,
+      "attempt": 1,
+      "items_pass": 5,
+      "items_total": 6,
+      "dataset_id": "docs_corpus_v1_n23_train18_hold5"
+    }
+  ]
+}

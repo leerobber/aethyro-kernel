@@ -1,0 +1,32 @@
+[package]
+name = "aethyro-ntg-kernel"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sha2 = "0.10"
+memmap2 = "0.9"
+
+[lib]
+name = "ntg_kernel"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "kernel_host"
+path = "src/main.rs"
+
+[[bin]]
+name = "density_bench"
+path = "src/bin/density_bench.rs"
+
+[[bin]]
+name = "graph_overhead_bench"
+path = "src/bin/graph_overhead_bench.rs"
+
+[[bin]]
+name = "phase4_calib"
+path = "src/bin/phase4_calib.rs"
+
+[[bin]]
+name = "ntg_school"
+path = "src/bin/ntg_school.rs"

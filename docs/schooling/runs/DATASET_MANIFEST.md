@@ -1,0 +1,30 @@
+# Dataset manifest (real repo docs)
+
+Generated for NTG doctorate schooling.
+
+Source root: `../docs`
+
+n_docs=23 total_bytes=161276 (real files under docs/)
+- DESIGN.md (9590 B)
+- EXPERIMENTS.md (24338 B)
+- LITERATURE.md (7313 B)
+- PHASE1_2_3_GAP_CLOSURE.md (9559 B)
+- PHASE1_2_3_IMPLEMENTATION.md (12874 B)
+- PHASE1_2_3_STORAGE_COMPLETE.md (11368 B)
+- PHASE5_PREP.md (3061 B)
+- PHASE_GATE_PROTOCOL.md (2732 B)
+- ROADMAP.md (16608 B)
+- STATUS.md (14581 B)
+- architecture/0001-vision-and-pivot.md (7752 B)
+- architecture/0002-safety-rails-for-self-modification.md (4932 B)
+- architecture/0003-sis-frontend.md (7602 B)
+- architecture/0004-phase3-tamper-evident-ledger.md (10739 B)
+- architecture/0005-canonical-ternary-storage.md (1557 B)
+- architecture/0006-phase4-calibration-task.md (2301 B)
+- architecture/README.md (1242 B)
+- phases/PHASE_0_COMPLETE.md (833 B)
+- phases/PHASE_1_COMPLETE.md (1976 B)
+- phases/PHASE_2_COMPLETE.md (2247 B)
+- phases/PHASE_3_COMPLETE.md (1910 B)
+- phases/PHASE_4_COMPLETE.md (2210 B)
+- phases/PHASE_5_COMPLETE.md (3951 B)
