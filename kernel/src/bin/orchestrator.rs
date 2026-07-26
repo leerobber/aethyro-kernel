@@ -1,14 +1,20 @@
-/// GenomicBrain Complete Pipeline Orchestrator
-/// Phases A-H: Data → Training → Synthesis → Reasoning → Multi-Agent → Meta-Optimization
-/// End-to-end execution with full Rust implementation, no Python
+//! GenomicBrain Complete Pipeline Orchestrator
+//! Phases A-H: Data → Training → Synthesis → Reasoning → Multi-Agent → Meta-Optimization
+//! End-to-end execution with full Rust implementation, no Python
+//!
+//! NOTE: `parse_vcf_and_encode`, `compute_ld`, `detect_haplotype_blocks`, and
+//! `train_brain` below are stubs that return hardcoded per-chromosome
+//! numbers (their own comments say so) -- no VCF/CSV/LD file is actually
+//! read yet. That's why `ChromosomeConfig`'s path fields and
+//! `PipelineOrchestrator::root_path` go unused: they're wired for the real
+//! implementation this orchestrates around, not consumed by the stubs.
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::Instant;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // populated for the real (not-yet-implemented) file-based phases
 struct ChromosomeConfig {
     chr: u8,
     vcf_path: PathBuf,
@@ -20,7 +26,9 @@ struct ChromosomeConfig {
 
 #[derive(Debug)]
 struct PipelineMetrics {
+    #[allow(dead_code)] // recorded per-phase for future structured reporting
     phase: String,
+    #[allow(dead_code)]
     chromosome: u8,
     start_time: Instant,
     end_time: Option<Instant>,
@@ -41,6 +49,7 @@ impl PipelineMetrics {
 }
 
 struct PipelineOrchestrator {
+    #[allow(dead_code)] // wired for the real (not-yet-implemented) file-based phases
     root_path: PathBuf,
     chromosomes: Vec<ChromosomeConfig>,
     metrics: Vec<PipelineMetrics>,
@@ -461,6 +470,7 @@ impl PipelineOrchestrator {
         println!("  ✓ Scientific manuscript (phases A-B methodology)");
 
         println!("\nExecution Success: {}/{} phases completed", successful, self.metrics.len());
+        println!("Actual measured wall-clock (this run, stub phase functions): {:.3}s", total_duration);
     }
 }
 
