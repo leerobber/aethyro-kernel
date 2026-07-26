@@ -10,6 +10,27 @@
 //! an earlier remote commit was superseded by the tested `ntg::*` modules.
 
 pub mod ntg;
+pub mod genomic;
+
+pub use genomic::{
+    VcfParser, VcfChromosome, BitstreamGenotypes, LdComputer, LdMatrix, LdPair, BlockDetector,
+    HaplotypeBlock, BlockStatistics, compute_block_statistics,
+    ChromosomeBrain, ChromosomeId, NeuronId, Synapse, GenomicNeuron, KairosState, BrainSummary,
+    init_chromosome_brain, ChromosomeAgent, AgentQuery, AgentResponse, AgentCoordinator,
+    CoordinatorResponse, DomainAgent, DomainType, DomainQuery, DiseaseDiagnosis, PatternSignature,
+    RiskSeverity, TestResults, DomainResult, AggregateStats,
+    Genome, GenomeSampler, EvolutionSim, FitnessModel, DefaultFitnessModel, GenerationStats,
+    PhenotypeHead, Environment, GxEEngine,
+    RecombinationMap, RecombinationComparator, RecombinationComparison,
+    HaplotypeBlockComparator, HaplotypeBlockComparison,
+    SovereignBrain, WorkingSet, LtmMotif, LtmStats, GlobalNeuronRef, StructuralMetrics,
+    ConsolidateReport, SovereignFitnessContext, reference_from_brain, synthetic_from_brain,
+    ld_coverage, LanguageOrgan, fixture_docs, Organ, run_selection_loop, format_summary,
+    LoopSummary, save_snapshot, load_snapshot_into, SnapshotReport,
+    Kairos, KairosReport, NurseryGenomeSpec, LifeStage, LifeCourse, StagePermissions,
+    Pulsewire, PulseEvent, VitalMeters, PulseHandles,
+    Guardian, DisciplineEthos, BirthImprint, FIRST_WORDS, GUARDIAN_NAME, GUARDIAN_ROLE,
+};
 
 pub use ntg::chain::{ChainEntry, ChainLog};
 pub use ntg::docparse::parse_into;
