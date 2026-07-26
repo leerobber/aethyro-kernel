@@ -151,7 +151,7 @@ mod tests {
         let head = PhenotypeHead::new("Height".to_string(), 5);
         let features = vec![0.5, 0.6, 0.4, 0.7, 0.3];
         let prediction = head.predict(&features);
-        assert!(prediction >= 0.0 && prediction <= 1.0);
+        assert!((0.0..=1.0).contains(&prediction));
     }
 
     #[test]
@@ -175,7 +175,7 @@ mod tests {
         let env = Environment::default_env();
 
         let prediction = engine.predict_trait("Cognition", &features, &env);
-        assert!(prediction >= 0.0 && prediction <= 1.0);
+        assert!((0.0..=1.0).contains(&prediction));
     }
 
     #[test]

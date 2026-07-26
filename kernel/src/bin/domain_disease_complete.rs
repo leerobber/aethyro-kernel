@@ -1,12 +1,12 @@
-/// Domain Disease Detection: Complete End-to-End Pipeline
-/// Pure Rust Implementation
-///
-/// Workflow:
-/// 1. Initialize 6 domain agents
-/// 2. Execute queries
-/// 3. Collect results
-/// 4. Generate reports (CSV, JSON, HTML)
-/// 5. Print summary
+//! Domain Disease Detection: Complete End-to-End Pipeline
+//! Pure Rust Implementation
+//!
+//! Workflow:
+//! 1. Initialize 6 domain agents
+//! 2. Execute queries
+//! 3. Collect results
+//! 4. Generate reports (CSV, JSON, HTML)
+//! 5. Print summary
 
 use ntg_kernel::genomic::{
     DomainAgent, DomainType, DomainQuery, ChromosomeId,
@@ -39,7 +39,7 @@ fn main() {
     };
 
     println!("\n[Step 1/3] Initializing Domain Agents...");
-    let mut agents = vec![
+    let agents = [
         (DomainType::Genomic, DomainAgent::new(brain.clone(), DomainType::Genomic)),
         (DomainType::CodeQuality, DomainAgent::new(brain.clone(), DomainType::CodeQuality)),
         (DomainType::Malware, DomainAgent::new(brain.clone(), DomainType::Malware)),

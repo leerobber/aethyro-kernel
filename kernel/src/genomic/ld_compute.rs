@@ -210,7 +210,7 @@ impl LdComputer {
         }
 
         let r = num / den;
-        Some(((r * r) as f32).max(0.0).min(1.0))
+        Some(((r * r) as f32).clamp(0.0, 1.0))
     }
 }
 

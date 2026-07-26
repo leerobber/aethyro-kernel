@@ -16,7 +16,7 @@ fn accelerated_transcription(signal: f32) -> f32 {
     if signal.is_nan() {
         0.0
     } else {
-        signal * 1.4142
+        signal * std::f32::consts::SQRT_2
     }
 }
 
@@ -27,7 +27,7 @@ fn regressed_transcription(signal: f32) -> f32 {
 }
 
 fn target_transcription(signal: f32) -> f32 {
-    signal * 1.4142 // what "good" looks like, for benchmark scoring
+    signal * std::f32::consts::SQRT_2 // what "good" looks like, for benchmark scoring
 }
 
 fn baseline_recombination(signal: f32) -> f32 {
@@ -67,7 +67,7 @@ fn main() {
 
     // ---- Selection-gated splice: a genuinely better candidate ----
     // Active strategy is still baseline_transcription (x*1.05); the
-    // candidate matches the benchmark target exactly (x*1.4142), so this
+    // candidate matches the benchmark target exactly (x*std::f32::consts::SQRT_2), so this
     // should show a clear positive selection coefficient and be accepted.
     println!("\n[Selection-gated splice] Candidate close to target (expect ACCEPT):");
     let bench = FitnessBenchmark::new(vec![1.0, 5.0, 10.0, 50.0, 100.0], target_transcription);

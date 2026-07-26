@@ -474,11 +474,11 @@ mod tests {
             assert_eq!(written, 9);
 
             // A SNP always perfectly correlates with itself.
-            assert!((buf[0 * 3 + 0] - 1.0).abs() < 1e-9);
+            assert!((buf[0] - 1.0).abs() < 1e-9);
 
             // ntg_genomic_get_ld must agree with the bulk matrix for the same pair.
             let direct = ntg_genomic_get_ld(handle, 1, 2);
-            assert!((direct - buf[1 * 3 + 2]).abs() < 1e-9);
+            assert!((direct - buf[3 + 2]).abs() < 1e-9);
 
             ntg_genomic_drop(handle);
         }

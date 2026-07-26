@@ -287,7 +287,7 @@ mod tests {
         let blocks = detector.detect_blocks(&pairs, 5).unwrap();
 
         // Should detect at least one block containing SNPs 0, 1, 2
-        assert!(blocks.len() > 0, "Expected at least one block");
+        assert!(!blocks.is_empty(), "Expected at least one block");
     }
 
     #[test]
