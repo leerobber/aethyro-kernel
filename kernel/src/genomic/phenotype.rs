@@ -1,6 +1,6 @@
-/// Phase C: Phenotype & GxE (Genotype × Environment)
-/// Trait prediction and gene-environment interactions
-/// Pure Rust implementation
+//! Phase C: Phenotype & GxE (Genotype × Environment)
+//! Trait prediction and gene-environment interactions
+//! Pure Rust implementation
 
 use crate::genomic::synthesis::Genome;
 use std::collections::HashMap;
@@ -25,10 +25,10 @@ impl PhenotypeHead {
     /// Predict trait from feature vector
     pub fn predict(&self, features: &[f32]) -> f32 {
         let mut output = self.bias;
-        for i in 0..features.len().min(self.weights.len()) {
-            output += features[i] * self.weights[i];
+        for (feature, weight) in features.iter().zip(self.weights.iter()) {
+            output += feature * weight;
         }
-        output.max(0.0).min(1.0) // Clamp to [0, 1]
+        output.clamp(0.0, 1.0) // Clamp to [0, 1]
     }
 }
 
@@ -106,7 +106,7 @@ impl GxEEngine {
             // G×E interaction (multiplicative term)
             let interaction = genetic_component * env_component * 0.1;
 
-            (genetic_component + env_component + interaction).max(0.0).min(1.0)
+            (genetic_component + env_component + interaction).clamp(0.0, 1.0)
         } else {
             0.5 // Default if trait not found
         }

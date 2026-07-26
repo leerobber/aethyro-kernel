@@ -1,6 +1,6 @@
-/// Haplotype Block Detection
-/// Identifies contiguous blocks of SNPs in high linkage disequilibrium
-/// Uses BFS on LD graph to find connected components
+//! Haplotype Block Detection
+//! Identifies contiguous blocks of SNPs in high linkage disequilibrium
+//! Uses BFS on LD graph to find connected components
 
 use crate::genomic::ld_compute::LdPair;
 use std::collections::{HashMap, VecDeque};
@@ -56,11 +56,11 @@ impl BlockDetector {
 
             graph
                 .entry(min_idx)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(max_idx);
             graph
                 .entry(max_idx)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(min_idx);
 
             edge_weights.insert((min_idx, max_idx), pair.r_squared);
@@ -101,8 +101,10 @@ impl BlockDetector {
                 }
             }
 
-            // Only create block if it has multiple SNPs
-            if component.len() >= 1 {
+            // Only create a block if it has multiple SNPs: `component` always
+            // contains at least the BFS seed SNP, so `>= 1` here was always
+            // true and let isolated singleton SNPs through as fake "blocks."
+            if component.len() >= 2 {
                 component.sort();
 
                 // Calculate mean r² for this block
@@ -227,7 +229,7 @@ pub fn compute_block_statistics(blocks: &[HaplotypeBlock]) -> BlockStatistics {
     let mut sizes: Vec<u32> = blocks.iter().map(|b| b.snp_indices.len() as u32).collect();
     sizes.sort();
 
-    let median_size = if sizes.len() % 2 == 0 {
+    let median_size = if sizes.len().is_multiple_of(2) {
         (sizes[sizes.len() / 2 - 1] + sizes[sizes.len() / 2]) / 2
     } else {
         sizes[sizes.len() / 2]
