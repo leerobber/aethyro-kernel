@@ -49,13 +49,13 @@ fn main() {
     println!("\n{}", "=".repeat(70));
     println!("GenomicBrain Training Protocol - KAIROS Cycles");
     println!("{}", "=".repeat(70));
-    println!("");
+    println!();
     println!("Config:");
     println!("  Cycles: {}", config.num_cycles);
     println!("  Learning rate: {}", config.learning_rate);
     println!("  Population: {}", config.population);
     println!("  LD window: {} SNPs", config.window_size);
-    println!("");
+    println!();
 
     let start_overall = Instant::now();
 
@@ -67,11 +67,11 @@ fn main() {
     let num_snps = snp_ids.len();
 
     println!("[OK] Loaded {} SNPs in {:.1}s", num_snps, start.elapsed().as_secs_f64());
-    println!("");
+    println!();
 
     // Training loop
     println!("[*] Starting KAIROS training cycles...");
-    println!("");
+    println!();
     println!("{:<8} {:<12} {:<12} {:<12} {:<12}",
         "Cycle", "Loss", "LD_mean", "Connectivity", "Time(ms)");
     println!("{}", "-".repeat(58));
@@ -115,7 +115,7 @@ fn main() {
     let total_time = start_overall.elapsed().as_secs_f64();
 
     // Summary
-    println!("");
+    println!();
     println!("{}", "=".repeat(70));
     println!("[TRAINING SUMMARY]");
     println!("{}", "=".repeat(70));
@@ -128,19 +128,19 @@ fn main() {
         println!("  Initial loss: {:.4}", initial_loss);
         println!("  Final loss:   {:.4}", final_loss);
         println!("  Improvement:  {:.1}%", improvement);
-        println!("");
+        println!();
         println!("  Mean LD (learned): {:.4}", metrics.iter().map(|m| m.ld_mean).sum::<f64>() / metrics.len() as f64);
         println!("  Connectivity: {:.4}", metrics.iter().map(|m| m.connectivity).sum::<f64>() / metrics.len() as f64);
-        println!("");
+        println!();
     }
 
     println!("  Total time: {:.1}s", total_time);
     println!("  Avg cycle: {:.1}s", total_time / config.num_cycles as f64);
-    println!("");
+    println!();
     println!("[OK] GenomicBrain training complete!");
     println!("     Next: export brain checkpoint, then generate synthetic genomes");
     println!("{}", "=".repeat(70));
-    println!("");
+    println!();
 }
 
 fn load_csv(csv_path: &str) -> (Vec<String>, Vec<u32>, Vec<Vec<u8>>) {

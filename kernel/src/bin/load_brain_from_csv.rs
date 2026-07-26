@@ -24,7 +24,7 @@ fn main() {
     println!("\n{}", "=".repeat(64));
     println!("GenomicBrain CSV Loader - Building from LD patterns");
     println!("{}", "=".repeat(64));
-    println!("");
+    println!();
 
     let start_overall = Instant::now();
 
@@ -72,7 +72,7 @@ fn main() {
     println!("  Samples: {}", num_samples);
     println!("  LD Pairs (high, r² > 0.5): {}", ld_pairs.len());
     println!("  Haplotype Blocks: {}", blocks.len());
-    println!("");
+    println!();
     println!("[CONNECTIVITY]");
     println!("  Avg SNPs per block: {:.1}", num_snps as f64 / blocks.len().max(1) as f64);
 
@@ -84,18 +84,18 @@ fn main() {
         }
     }
 
-    println!("");
+    println!();
     println!("[TIME] Performance");
     println!("  Load: {:.1}s", load_time);
     println!("  LD computation: {:.1}s", ld_time);
     println!("  Block identification: {:.1}s", block_time);
     println!("  Total: {:.1}s", start_overall.elapsed().as_secs_f64());
-    println!("");
+    println!();
     println!("[OK] GenomicBrain ready to train!");
     println!("     Output: {}", output_path);
     println!("     Next: compute_ld_fast for full LD matrix, then train.rs for KAIROS");
     println!("{}", "=".repeat(64));
-    println!("");
+    println!();
 }
 
 fn load_csv(csv_path: &str) -> (Vec<String>, Vec<u32>, Vec<Vec<u8>>) {

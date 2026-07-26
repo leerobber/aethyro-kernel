@@ -20,10 +20,10 @@ fn main() {
     println!("═══════════════════════════════════════════════════");
     println!("VCF → CSV Converter (Rust)");
     println!("═══════════════════════════════════════════════════");
-    println!("");
+    println!();
     println!("Input:  {}", vcf_path);
     println!("Output: {}", csv_path);
-    println!("");
+    println!();
 
     let start = std::time::Instant::now();
 
@@ -115,14 +115,14 @@ fn main() {
     }
 
     let elapsed = start.elapsed();
-    println!("");
+    println!();
     println!("═══════════════════════════════════════════════════");
     println!("✓ Conversion Complete!");
     println!("═══════════════════════════════════════════════════");
-    println!("");
+    println!();
     println!("Variants: {}", variant_count);
     println!("Samples: {}", samples.len());
     println!("Duration: {:.1}s", elapsed.as_secs_f64());
     println!("Rate: {:.0} variants/sec", variant_count as f64 / elapsed.as_secs_f64());
-    println!("");
+    println!();
 }
