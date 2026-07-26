@@ -1,5 +1,5 @@
-/// Report Generation - Pure Rust
-/// Generates CSV, JSON, and HTML reports from domain disease test results
+//! Report Generation - Pure Rust
+//! Generates CSV, JSON, and HTML reports from domain disease test results
 
 use std::fs;
 
@@ -18,6 +18,12 @@ pub struct DomainResult {
 pub struct TestResults {
     pub timestamp: String,
     pub domains: Vec<DomainResult>,
+}
+
+impl Default for TestResults {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TestResults {
@@ -364,14 +370,55 @@ pub struct AggregateStats {
     pub total_latency_ms: u32,
 }
 
-/// Simple timestamp format (no chrono dependency)
+/// Current UTC timestamp as an ISO-8601 string, computed from
+/// `SystemTime` with no `chrono` dependency. This used to unconditionally
+/// return a hardcoded literal ("2026-07-12T14:30:00Z"), so every report
+/// ever generated claimed that exact creation time.
 fn chrono_format() -> String {
-    format!("2026-07-12T14:30:00Z")
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    format_timestamp(secs)
+}
+
+/// Pure conversion of Unix seconds to an ISO-8601 UTC string, split out
+/// from `chrono_format` so the civil-from-days math is checkable against
+/// known dates instead of only ever running against "now".
+fn format_timestamp(secs: u64) -> String {
+    let (days, secs_of_day) = (secs / 86_400, secs % 86_400);
+    let (hour, min, sec) = (secs_of_day / 3600, (secs_of_day / 60) % 60, secs_of_day % 60);
+
+    // Civil-from-days (Howard Hinnant's algorithm): days since 1970-01-01 -> (y, m, d).
+    let z = days as i64 + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as u64; // [0, 146096]
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365; // [0, 399]
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
+    let mp = (5 * doy + 2) / 153; // [0, 11]
+    let d = doy - (153 * mp + 2) / 5 + 1; // [1, 31]
+    let m = if mp < 10 { mp + 3 } else { mp - 9 }; // [1, 12]
+    let y = if m <= 2 { y + 1 } else { y };
+
+    format!("{y:04}-{m:02}-{d:02}T{hour:02}:{min:02}:{sec:02}Z")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn format_timestamp_matches_known_dates() {
+        // Unix epoch itself.
+        assert_eq!(format_timestamp(0), "1970-01-01T00:00:00Z");
+        // 2024-01-01T00:00:00Z (verified against `date -u -d @1704067200`).
+        assert_eq!(format_timestamp(1_704_067_200), "2024-01-01T00:00:00Z");
+        // 2000-02-29T12:34:56Z -- exercises the leap-year Feb 29 boundary.
+        assert_eq!(format_timestamp(951_827_696), "2000-02-29T12:34:56Z");
+        // 2023-12-31T23:59:59Z -- year rollover.
+        assert_eq!(format_timestamp(1_704_067_199), "2023-12-31T23:59:59Z");
+    }
 
     #[test]
     fn test_results_to_csv() {

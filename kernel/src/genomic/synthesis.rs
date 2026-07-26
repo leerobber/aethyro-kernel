@@ -22,6 +22,7 @@
 //!   modeled either way; blocks are themselves defined as maximal
 //!   LD-connected components, so that's a reasonable simplification, not
 //!   an omission of anything the block structure itself would capture.
+//!
 //! Pure Rust implementation
 
 use crate::genomic::bitsliced_genotypes::BitstreamGenotypes;
