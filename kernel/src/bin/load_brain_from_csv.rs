@@ -1,5 +1,5 @@
-/// Load GenomicBrain from CSV: reads chr LD patterns and initializes network
-/// Usage: load_brain_from_csv <chr1.csv> [--output brain_chr1.bin]
+//! Load GenomicBrain from CSV: reads chr LD patterns and initializes network
+//! Usage: load_brain_from_csv <chr1.csv> [--output brain_chr1.bin]
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -32,7 +32,7 @@ fn main() {
     println!("[*] Loading CSV into memory...");
     let start = Instant::now();
 
-    let (snp_ids, positions, genotypes) = load_csv(csv_path);
+    let (snp_ids, _positions, genotypes) = load_csv(csv_path);
     let num_snps = snp_ids.len();
     let num_samples = if !genotypes.is_empty() {
         genotypes[0].len()
@@ -110,24 +110,18 @@ fn load_csv(csv_path: &str) -> (Vec<String>, Vec<u32>, Vec<Vec<u8>>) {
     let mut positions = Vec::new();
     let mut genotypes: Vec<Vec<u8>> = Vec::new();
 
-    for line in lines {
-        if let Ok(line) = line {
-            let parts: Vec<&str> = line.split(',').collect();
-            if parts.len() < 3 {
-                continue;
-            }
-
-            snp_ids.push(parts[0].to_string());
-            positions.push(parts[1].parse::<u32>().unwrap_or(0));
-
-            let mut geno = Vec::new();
-            for i in 2..parts.len() {
-                let val = parts[i].parse::<u8>().unwrap_or(3);
-                geno.push(val);
-            }
-
-            genotypes.push(geno);
+    for line in lines.map_while(Result::ok) {
+        let parts: Vec<&str> = line.split(',').collect();
+        if parts.len() < 3 {
+            continue;
         }
+
+        snp_ids.push(parts[0].to_string());
+        positions.push(parts[1].parse::<u32>().unwrap_or(0));
+
+        let geno: Vec<u8> = parts[2..].iter().map(|p| p.parse().unwrap_or(3)).collect();
+
+        genotypes.push(geno);
     }
 
     (snp_ids, positions, genotypes)
@@ -187,7 +181,7 @@ fn compute_r2(geno_i: &[u8], geno_j: &[u8]) -> f64 {
 
     if var_i > 1e-9 && var_j > 1e-9 {
         let r = cov / (var_i.sqrt() * var_j.sqrt());
-        let r_clamped = r.max(-1.0).min(1.0);
+        let r_clamped = r.clamp(-1.0, 1.0);
         (r_clamped * r_clamped).max(0.0)
     } else {
         0.0
@@ -205,8 +199,8 @@ fn identify_blocks(
     // Build adjacency from LD pairs
     let mut adj: HashMap<usize, Vec<usize>> = HashMap::new();
     for (i, j, _) in ld_pairs {
-        adj.entry(*i).or_insert_with(Vec::new).push(*j);
-        adj.entry(*j).or_insert_with(Vec::new).push(*i);
+        adj.entry(*i).or_default().push(*j);
+        adj.entry(*j).or_default().push(*i);
     }
 
     // BFS to find connected components
