@@ -24,6 +24,10 @@ jobs:
         working-directory: kernel
         run: cargo test
 
+      - name: cargo test --release
+        working-directory: kernel
+        run: cargo test --release
+
       - name: phase4 calib smoke (fixtures)
         working-directory: kernel
         run: cargo run --release --bin phase4_calib -- --json
@@ -45,6 +49,10 @@ jobs:
       - name: density bench smoke
         working-directory: kernel
         run: cargo run --release --bin density_bench
+
+      - name: gemm bench smoke (multi-layer forward vs serial reference)
+        working-directory: kernel
+        run: cargo run --release --bin gemm_bench
 
       - name: cargo clippy
         working-directory: kernel

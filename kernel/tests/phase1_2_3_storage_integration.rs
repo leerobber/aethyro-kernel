@@ -290,10 +290,13 @@ fn test_observability_metrics() -> Result<(), NtgError> {
     let density2 = pt.compute_density();
     assert_eq!(density2, 0.0);
 
-    // Cycle tracking
+    // Cycle tracking. `cycles` is microsecond wall-clock, not a real cycle
+    // counter -- on fast hardware (especially with LTO release opt) a
+    // 100-element scalar dot can legitimately round to 0us, so assert the
+    // recording bookkeeping instead of assuming a nonzero elapsed time.
     let (_result, cycles) = tobl_dot_product(&pt, &pt, None)?;
     pt.record_cycles(cycles);
-    assert!(pt.last_op_cycles > 0);
+    assert_eq!(pt.last_op_cycles, cycles);
 
     println!("Observability metrics: generation={}, cycles={}, density={}", pt.generation, pt.last_op_cycles, density1);
 
