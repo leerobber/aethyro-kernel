@@ -15,6 +15,7 @@ pub mod budget;
 pub mod multi_axis;
 pub mod adaptive;
 pub mod loop_controller;
+pub mod ledger;
 
 pub use multi_axis::{
     MultiAxisFitness, MultiAxisEvaluator, SelectionOutcome as MultiAxisSelectionOutcome,
@@ -22,6 +23,7 @@ pub use multi_axis::{
 };
 pub use adaptive::{AdaptiveMutationProposer, DegradationSignal};
 pub use loop_controller::{LoopController, LoopOutcome, LoopStats};
+pub use ledger::{MutationLedger, MutationEvent, CohortStats, MutationKnowledge};
 
 use super::error::NtgError;
 use super::graph::Graph;

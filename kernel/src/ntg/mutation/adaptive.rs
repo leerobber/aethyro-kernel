@@ -10,9 +10,10 @@
 use super::rules::{MutationRule, MutationRuleKind};
 use super::super::graph::{Graph, NodeId};
 use super::super::error::NtgError;
+use serde::{Serialize, Deserialize};
 
 /// Signal indicating what aspect of performance is degrading.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DegradationSignal {
     /// Latency dominant (latency ratio > memory ratio).
     LatencyDominant,

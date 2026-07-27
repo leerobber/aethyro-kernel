@@ -9,8 +9,9 @@
 
 use super::super::error::NtgError;
 use super::super::graph::{Graph, NodeId, NodeKind};
+use serde::{Serialize, Deserialize};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum MutationRuleKind {
     AddNode { label: String },
     RemoveNode { node_id: NodeId },
