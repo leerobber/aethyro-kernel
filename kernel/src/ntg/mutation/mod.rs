@@ -29,6 +29,9 @@ pub mod peer_review;
 pub mod publication_pipeline;
 pub mod safety_governance;
 pub mod domain_coordination;
+pub mod brain_alpha;
+pub mod brain_beta;
+pub mod brain_integration;
 
 pub use multi_axis::{
     MultiAxisFitness, MultiAxisEvaluator, SelectionOutcome as MultiAxisSelectionOutcome,
@@ -78,6 +81,18 @@ pub use domain_coordination::{
     DomainCoordinationEngine, AgentId, AgentLevel, PatternAffinity, MutationProposal,
     ConsensusDecision, QueuedMutation, PatternTransfer, DomainSnapshot, CoordinationConfig,
     AgentMetadata,
+};
+pub use brain_alpha::{
+    BrainAlpha, BehavioralDriftDetector, BehavioralSignature, HealthMonitor, ConnectionStatus,
+    SyncState, RollbackManager, Checkpoint, RepairAction,
+};
+pub use brain_beta::{
+    BrainBeta, PatternLearner, MutationPattern, StrategyOptimizer, Strategy, MutationRouter,
+    RoutingDecision, LoadPredictor,
+};
+pub use brain_integration::{
+    TwinBrainAgent, CrossBrainChannel, SyncHint, RoutingHint, BrainDecision, TwinBrainReport,
+    TwinBrainMetrics,
 };
 
 use super::error::NtgError;
