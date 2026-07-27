@@ -142,7 +142,7 @@ do not start N+1 until N is certified.
 | Self-parse dogfood tests | ✅ |
 | GraphNode + sparse weights for native runtime | ✅ |
 | Lazy glyph / PIXEL-lite | ❌ design only (ADR 0003) |
-| Forward-pass overhead vs static baseline (measured) | ❌ |
+| Forward-pass overhead vs static baseline (measured) | ✅ **DONE 2026-07-09** — `graph_overhead_bench`: ~10.5× on an 8-node graph (sub-microsecond absolute cost either way; not a ternary TOBL cost, pure structural/topo overhead) — see EXPERIMENTS.md. This table had gone stale claiming it was still open; corrected 2026-07-27. |
 | Edge interaction as structural relatedness | ❌ empirically weak (see EXPERIMENTS) |
 
 ### Phase 3 — Self-mod + ledger — **DONE for ADR 0002 rails**
