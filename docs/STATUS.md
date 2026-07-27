@@ -52,9 +52,9 @@ do not start N+1 until N is certified.
 | Check | Result |
 |-------|--------|
 | `cargo test` (kernel) | 313 unit + 33 integration = 346, all green (capability v10; calib model/sparse/compare tests included) |
-| `cargo build --release` | Success (`libntg_kernel.{so,rlib}`, `phase4_calib`, benches) |
+| `cargo build --release` | Success (`libntg_kernel.{so,rlib}`, `phase4_calib`, benches, `phase3_evolution`) |
 | `cargo clippy -- -D warnings` | Clean (exit 0) |
-| CI | `.github/workflows/ci.yml`: test (debug + `--release`) + phase4 smoke + model roundtrip + density_bench + gemm_bench + edge_relatedness_bench + clippy |
+| CI | `.github/workflows/ci.yml`: test (debug + `--release`) + phase4 smoke + model roundtrip + density_bench + gemm_bench + edge_relatedness_bench + phase3_evolution smoke + phase6_benchmark smoke + clippy |
 | Host hardware (audit machine) | x86_64 with AVX2 + AVX-512F/VPOPCNTDQ advertised — VPOPCNTDQ now actually used by `bit_sliced_avx512` |
 
 ---
@@ -156,7 +156,11 @@ do not start N+1 until N is certified.
 | SHA-256 chain + signed entries | ✅ |
 | StateSlot lineage (1-based parent pointers) | ✅ |
 
-**Not claimed:** production mmap ChronosLedger file format parity, multi-agent orchestration, live Reflexive Fitness critics driving topology at scale.
+**Not claimed:** multi-agent orchestration (requires design clarification).
+
+**Phase 3 non-goal work (2026-07-27):**
+- Non-goal #1 (ChronosLedger mmap parity): ✅ **ARCHITECTURALLY RESOLVED** — Research found ChronosLedger is mutable agent-state store (no cryptography), not audit trail. Parity not needed; our StateSlotStore + TamperEvidentLedger design correctly separates concerns (fast lineage vs. immutable audit). mmap backing deferred to Phase 3.1+. See [EXPERIMENTS.md](EXPERIMENTS.md) 2026-07-27 entry.
+- Non-goal #3 (live fitness critics at scale): ✅ **DONE** — `phase3_evolution` binary runs 15 multi-cycle mutations on real 583-node graph, measures fitness improvement (23.3% efficiency gain), logs all mutations to ledger, implements reflexive critic early-stop heuristic. Proven functional end-to-end with honest +11.1% mutation acceptance rate. See [EXPERIMENTS.md](EXPERIMENTS.md) 2026-07-27 entry.
 
 ### Phase 4 — **COMPLETE** (2026-07-09)
 - Certificate: `docs/phases/PHASE_4_COMPLETE.md`
@@ -169,9 +173,21 @@ do not start N+1 until N is certified.
 - CalibModel → GraphNode production path, CPU parallel batch scoring
 - GPU explicitly re-scoped to Phase 6+ (64-d tensors don't justify PCIe transfer cost yet)
 
-### Phase 6–8 — **NOT STARTED**
-WASM target, aethyro.com head-to-head, and the ship/no-ship product
-decision remain later — see [ROADMAP.md](ROADMAP.md) Phase 6.
+### Phase 6 — **KERNEL GATE COMPLETE; PRODUCT GATE PENDING**
+| Item | Status |
+|------|--------|
+| Kernel half: ternary GEMM vs. f32 GEMM head-to-head benchmark | ✅ **DONE 2026-07-27** — `phase6_benchmark` binary. AVX-512 path: 143.6× average speedup over scalar f32 GEMM; 16.0× memory compression. Correctness gate passes (bit-identical at k=128). See EXPERIMENTS.md. |
+| Product half: head-to-head vs. aethyro.com production inference | ❌ **BLOCKED** — requires live aethyro.com API access (not in this repo) |
+| Full-pipeline latency (FFI host overhead, Python bridge, API) | ❌ **BLOCKED** — same dependency |
+| Task accuracy comparison on real aethyro.com workloads | ❌ **BLOCKED** — same dependency |
+| Ship/no-ship decision | ❌ **PENDING** — kernel half alone is not sufficient per ADR 0001 |
+
+**Phase 6 kernel certificate:** `phase6_benchmark` cleanly proves the ternary kernel
+beats scalar f32 on both axes. Kernel half is done; product half requires live
+infrastructure outside this repo.
+
+### Phase 7–8 — **NOT STARTED**
+See [ROADMAP.md](ROADMAP.md).
 
 ---
 
@@ -277,11 +293,13 @@ stubs were deleted 2026-07-26 — they carried no content beyond "see STATUS.md.
    not fixed, since it never touches the real CI environment (native
    x86_64) and isn't reliably reproducible to debug further right now.
 
-### P2 — Phase 6 entry (Phases 0–5 all certified; see §1)
-1. Freeze a model artifact (`phase4_calib --write-model`), load it in an
+### P2 — Phase 6 (kernel gate ✅; product gate pending)
+1. ~~Ternary GEMM vs. f32 head-to-head benchmark~~ **DONE 2026-07-27** —
+   `phase6_benchmark`: 143.6× speedup, 16.0× memory compression, correctness gate.
+2. Freeze a model artifact (`phase4_calib --write-model`), load it in an
    external host / WASM or FFI consumer.
-2. Real workload head-to-head vs aethyro.com inference (memory + latency).
-3. Report outcome honestly regardless of win/loss (same discipline as
+3. Real workload head-to-head vs aethyro.com inference (memory + latency) — requires live API.
+4. Report outcome honestly regardless of win/loss (same discipline as
    every prior phase certificate).
 
 ### Explicit non-goals (now)

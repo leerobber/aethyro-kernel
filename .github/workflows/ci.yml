@@ -58,6 +58,14 @@ jobs:
         working-directory: kernel
         run: cargo run --release --bin edge_relatedness_bench
 
+      - name: phase3 evolution smoke
+        working-directory: kernel
+        run: cargo run --release --bin phase3_evolution
+
+      - name: phase6 benchmark smoke (ternary vs f32 GEMM)
+        working-directory: kernel
+        run: cargo run --release --bin phase6_benchmark
+
       - name: cargo clippy
         working-directory: kernel
         run: cargo clippy -- -D warnings
