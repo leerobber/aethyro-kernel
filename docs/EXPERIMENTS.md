@@ -667,3 +667,77 @@ verification only.
 NEON tests are `aarch64`-gated and invisible on x86_64). `cargo clippy
 -- -D warnings` and `cargo clippy --all-targets -- -D warnings`: both
 clean.
+
+## 2026-07-27 — First multi-layer forward benchmark (Phase 1 gap closed) + a real `--release` test failure found and fixed
+
+Every existing benchmark (`density_bench`, `ld_simd_bench`) measured a
+single isolated dot product. Nothing had ever run
+`Runtime::forward_native_parallel` past 1-2 toy nodes in one layer, so
+there was no evidence the threaded/chunked scheduling path in `runtime.rs`
+holds up once a layer has hundreds to low-thousands of nodes chained
+across multiple layers — either in correctness or in wall-clock. This was
+the last open Phase 1 item in the README's "explicitly not done" list.
+
+**Built `kernel/src/bin/gemm_bench.rs`:** constructs real multi-node,
+multi-layer sparse ternary networks (3 layers, square shapes at 256 and
+1024 nodes/layer) and times the actual `Runtime` forward chain end to end,
+not a single primitive call. Every run is checked against a
+single-threaded serial reference that calls the same
+`SparseBitSlicedTernary::ternary_matmul` primitive node-by-node with no
+threading or chunking — the bench fails the process (exit 1) on any
+divergence, same "bench is also a proof" pattern as `density_bench`.
+
+Layer wiring note (worth recording since it's non-obvious from the code):
+a layer of `n` nodes emits an activation tensor of length `n * 64`, with
+exactly one meaningful bit per node at chunk `id`, bit offset 0 (see
+`forward_native_parallel`'s `blocks.first()` + `BitSlicedBlock{pos:1,neg:0}`
+pattern). A downstream layer's weight vectors have to place any nonzero
+mass at those same `logical_idx * 64` stride positions — anywhere else is
+a structurally-always-zero bit and silently contributes nothing.
+
+**Measured** (median of 15 iters after 3 warmup, threshold=1, release + LTO,
+same host as the AVX-512/NEON entries above):
+
+| shape | nodes/layer | input density | chain µs (3 layers) | nodes/sec | matches serial reference |
+|---|---:|---:|---:|---:|:---:|
+| small (256×256×3) | 256 | 5% | 550.25 | 1,395,742 | yes |
+| small (256×256×3) | 256 | 20% | 976.79 | 786,252 | yes |
+| small (256×256×3) | 256 | 60% | 1386.95 | 553,733 | yes |
+| gemm (1024×1024×3) | 1024 | 5% | 2727.06 | 1,126,487 | yes |
+| gemm (1024×1024×3) | 1024 | 20% | 5496.65 | 558,886 | yes |
+| gemm (1024×1024×3) | 1024 | 60% | 15916.68 | 193,005 | yes |
+
+Every row matches the serial reference bit-for-bit at every layer, not
+just the final output — the parallel/chunked scheduling path in
+`forward_native_parallel` is now proven correct at this scale, not just
+assumed from the 2-node tests already in `runtime.rs`.
+
+**A genuine non-win worth recording:** downstream layer density is ~1.6%
+regardless of input density (5%, 20%, or 60% all converge to the same
+~0.016 output density). This is real, not a harness bug — the golden
+reference agrees exactly. With `threshold=1` and each node's weight mass
+placed only at the single stride position matching a given upstream node,
+a node only ever fires on an exact single-bit AND match; raising overall
+input density doesn't raise the odds of that one specific bit lining up.
+This is an architectural property of the current chunk-level interaction
+primitive worth knowing before reading too much into density sweeps at
+the network level (as opposed to the single-vector-dot-product level,
+where density directly drives popcount cost as already shown above).
+
+**Also found while verifying this in `--release` mode (not just default
+debug `cargo test`, which is what CI runs):** `test_observability_metrics`
+in `tests/phase1_2_3_storage_integration.rs` failed deterministically
+under `cargo test --release`, on `main` before this change too (confirmed
+via `git stash`) — unrelated to this benchmark. It asserted
+`pt.last_op_cycles > 0` after a 100-element scalar dot product, but that
+field is wall-clock microseconds, not a real cycle counter, and a 100-
+element op on this host (especially with LTO) legitimately completes in
+under 1µs, rounding to 0. CI never caught this because CI runs plain
+`cargo test` (debug build, slow enough to never round to zero) — so this
+was a real, silent gap between "CI green" and "the code is correct in the
+build users actually ship." Fixed by asserting the recording bookkeeping
+(`last_op_cycles == cycles`) instead of assuming wall-clock elapsed time
+is always nonzero.
+
+`cargo test --release`: 341 passed (confirmed clean including the fixed
+test). `cargo clippy --all-targets --release -- -D warnings`: clean.

@@ -54,7 +54,7 @@ do not start N+1 until N is certified.
 | `cargo test` (kernel) | 308 unit + 33 integration = 341, all green (capability v10; calib model/sparse/compare tests included) |
 | `cargo build --release` | Success (`libntg_kernel.{so,rlib}`, `phase4_calib`, benches) |
 | `cargo clippy -- -D warnings` | Clean (exit 0) |
-| CI | `.github/workflows/ci.yml`: test + phase4 smoke + model roundtrip + density_bench + clippy |
+| CI | `.github/workflows/ci.yml`: test (debug + `--release`) + phase4 smoke + model roundtrip + density_bench + gemm_bench + clippy |
 | Host hardware (audit machine) | x86_64 with AVX2 + AVX-512F/VPOPCNTDQ advertised — VPOPCNTDQ now actually used by `bit_sliced_avx512` |
 
 ---
@@ -129,7 +129,7 @@ do not start N+1 until N is certified.
 | SIMD dispatch + bit-identity tests | ✅ |
 | Native runtime + accel selection | ✅ |
 | Recorded micro-bench deltas vs scalar (dots) | ✅ EXPERIMENTS.md 2026-07-09 |
-| End-to-end / GEMM / production deltas | ❌ **open** |
+| End-to-end / GEMM / production deltas | ✅ **DONE 2026-07-27** — `gemm_bench`: real multi-layer forward chain, proven bit-identical to a serial reference (not just claimed) up to 1024 nodes/layer × 3 layers |
 | True AVX-512 multi-block popcnt kernels | ✅ **DONE 2026-07-27** — `bit_sliced_avx512::dot_product_avx512`, real `_mm512_popcnt_epi64`, wired into `dot_product_auto`/`bit_sliced_dot_fast` |
 | NEON full path | ✅ **DONE 2026-07-27** — real `vmull_s8`/`vaddlvq_s16` in `matmul_neon_inner` and `tobl_dot_neon`; verified via QEMU aarch64 emulation (no ARM CI/hardware yet, flagged honestly) |
 
@@ -248,13 +248,20 @@ stubs were deleted 2026-07-26 — they carried no content beyond "see STATUS.md.
    `neon_matches_scalar` (wrong `NtgError` scope) that had silently never
    compiled before, since nothing had ever actually built this crate's
    aarch64-gated code until now.
+8. ~~End-to-end/GEMM-scale benchmark~~ **DONE 2026-07-27** — `cargo run
+   --release --bin gemm_bench`: real multi-node, multi-layer sparse
+   ternary forward chains (up to 1024 nodes/layer × 3 layers), timed
+   end-to-end through `Runtime::forward_native_parallel` and checked
+   bit-for-bit at every layer against a single-threaded serial reference
+   using the same primitive. Also surfaced and fixed a real
+   `cargo test --release`-only failure (`test_observability_metrics`
+   asserted wall-clock cycles are always nonzero; false on fast hardware)
+   that plain debug-mode `cargo test` — what CI runs — never caught. See
+   EXPERIMENTS.md "First multi-layer forward benchmark."
 
 ### P1 — Engineering hardening (still open)
 1. Wire OpStats + device name into ledger entries on forward.
-2. No end-to-end/GEMM-scale benchmark — `density_bench` and the AVX-512
-   numbers are dot-product micro-benchmarks; nothing exercises a full
-   model-scale matmul yet.
-3. A wall-clock-budget test (`calib::tests::self_mod_probe_enabled_logs_ledger`,
+2. A wall-clock-budget test (`calib::tests::self_mod_probe_enabled_logs_ledger`,
    5ms budget) was observed to fail intermittently under QEMU aarch64
    emulation with the full suite running in parallel (never on native
    x86_64, and not reproducible on repeat aarch64 runs either) — noted,
