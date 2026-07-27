@@ -63,7 +63,7 @@ impl IntentMemory {
             )
         });
 
-        for (_idx, other_intent) in related_intents.iter().enumerate() {
+        for other_intent in related_intents.iter() {
             // Create implicit edge index from intent names (deterministic).
             let other_id = fnv1a(other_intent) as usize;
             let intent_id = fnv1a(intent) as usize;

@@ -74,11 +74,7 @@ impl EdgeWeight {
 
     /// Time since last access (seconds)
     pub fn age(&self, now: u64) -> u64 {
-        if now >= self.last_accessed_at {
-            now - self.last_accessed_at
-        } else {
-            0
-        }
+        now.saturating_sub(self.last_accessed_at)
     }
 
     /// Apply decay and return true if weight drops below threshold
@@ -118,11 +114,6 @@ impl ForgetEngine {
             decay_model,
             prune_threshold: prune_threshold.clamp(0.0, 1.0),
         }
-    }
-
-    /// Default engine: Ebbinghaus 24h decay, 0.1 threshold
-    pub fn default() -> Self {
-        Self::new(DecayModel::ebbinghaus_24h(), 0.1)
     }
 
     /// Create or strengthen an edge (Hebbian potentiation)
@@ -185,7 +176,7 @@ impl ForgetEngine {
         let mut medium = 0;
         let mut weak = 0;
 
-        for (_, weight) in self.weights.iter_mut() {
+        for weight in self.weights.values_mut() {
             let w = self.decay_model.weight_at(weight.weight, weight.age(now) as f64);
             if w >= 0.7 {
                 strong += 1;
@@ -201,6 +192,12 @@ impl ForgetEngine {
 
     pub fn edge_count(&self) -> usize {
         self.weights.len()
+    }
+}
+
+impl Default for ForgetEngine {
+    fn default() -> Self {
+        Self::new(DecayModel::ebbinghaus_24h(), 0.1)
     }
 }
 

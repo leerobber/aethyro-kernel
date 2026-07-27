@@ -69,17 +69,17 @@ impl HyperVector {
         let mut result_pos = vec![0u64; Self::WORDS];
         let mut result_neg = vec![0u64; Self::WORDS];
 
-        let threshold = (vectors.len() as u64 + 1) / 2;
+        let threshold = (vectors.len() as u64).div_ceil(2);
 
         for word_idx in 0..Self::WORDS {
             let mut pos_count = 0u64;
             let mut neg_count = 0u64;
 
             for vec in vectors {
-                if (vec.pos[word_idx] >> 0) & 1 == 1 {
+                if vec.pos[word_idx] & 1 == 1 {
                     pos_count += 1;
                 }
-                if (vec.neg[word_idx] >> 0) & 1 == 1 {
+                if vec.neg[word_idx] & 1 == 1 {
                     neg_count += 1;
                 }
             }
