@@ -31,6 +31,7 @@ pub mod safety_governance;
 pub mod domain_coordination;
 pub mod brain_alpha;
 pub mod brain_beta;
+pub mod brain_gamma;
 pub mod brain_integration;
 
 pub use multi_axis::{
@@ -90,9 +91,15 @@ pub use brain_beta::{
     BrainBeta, PatternLearner, MutationPattern, StrategyOptimizer, Strategy, MutationRouter,
     RoutingDecision, LoadPredictor,
 };
+pub use brain_gamma::{
+    BrainGamma, PolicyDirective, PolicyPriority, PolicyScope, EvolutionPlan, MutationType,
+    LineageObjective, MutationOutcome, LineageRecord, ForecastSnapshot, GovernanceMetrics,
+    GammaReport,
+};
 pub use brain_integration::{
     TwinBrainAgent, CrossBrainChannel, SyncHint, RoutingHint, BrainDecision, TwinBrainReport,
-    TwinBrainMetrics,
+    TwinBrainMetrics, QuadBrainAgent, QuadBrainMetrics, QuadBrainReport, HealthSnapshot,
+    StrategySnapshot,
 };
 
 use super::error::NtgError;
