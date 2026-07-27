@@ -102,11 +102,12 @@ impl LoopController {
 
         let signal = degradation_signal.unwrap();
 
-        // Step 2: Propose mutations.
-        let proposals = self.proposer.propose_mutations(
+        // Step 2: Propose mutations (with ledger-informed confidence bias).
+        let proposals = self.proposer.propose_mutations_with_ledger(
             graph,
             signal,
             self.config.max_mutations_per_cycle,
+            &self.ledger,
         )?;
         stats.mutations_proposed = proposals.len();
 

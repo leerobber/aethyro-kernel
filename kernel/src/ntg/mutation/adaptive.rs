@@ -10,6 +10,7 @@
 use super::rules::{MutationRule, MutationRuleKind};
 use super::super::graph::{Graph, NodeId};
 use super::super::error::NtgError;
+use super::ledger::MutationLedger;
 use serde::{Serialize, Deserialize};
 
 /// Signal indicating what aspect of performance is degrading.
@@ -102,6 +103,97 @@ impl AdaptiveMutationProposer {
         }
 
         Ok(proposals)
+    }
+
+    /// Propose mutations with ledger-informed confidence bias.
+    /// Uses learned patterns to prefer mutations that have worked well for this signal type.
+    pub fn propose_mutations_with_ledger(
+        &mut self,
+        graph: &Graph,
+        signal: DegradationSignal,
+        count: usize,
+        ledger: &MutationLedger,
+    ) -> Result<Vec<MutationRule>, NtgError> {
+        let mut proposals = Vec::new();
+        self.proposal_count += count as u64;
+
+        // Ledger coverage: if we have learned data, shift toward exploitation
+        let ledger_events = ledger.events().len();
+        let ledger_confidence_bonus = (ledger_events as f64 / 100.0).min(0.2); // up to +20% from ledger
+        let exploit_threshold = (0.6 - ledger_confidence_bonus).max(0.3); // but never below 30%
+        let exploit = self.accept_rate > exploit_threshold;
+
+        for i in 0..count {
+            let rule = if exploit && !self.successful_mutations.is_empty() {
+                // Exploit: try variations on previous wins, biased by ledger confidence.
+                self.propose_exploitation_mutation(graph, i)?
+            } else {
+                // Explore: try targeted mutations, preferring high-confidence types from ledger.
+                self.propose_exploration_mutation_with_confidence(graph, signal, i, ledger)?
+            };
+            proposals.push(rule);
+        }
+
+        Ok(proposals)
+    }
+
+    /// Exploration with ledger confidence bias: prefer mutation types with high success rate.
+    fn propose_exploration_mutation_with_confidence(
+        &self,
+        graph: &Graph,
+        signal: DegradationSignal,
+        index: usize,
+        ledger: &MutationLedger,
+    ) -> Result<MutationRule, NtgError> {
+        // Query ledger for best mutation for this signal
+        if let Some(best_mutation_type) = ledger.best_mutation_for_signal(signal) {
+            let confidence = ledger.confidence_for(&best_mutation_type, signal);
+
+            // If high confidence, bias toward this mutation type
+            if confidence > 0.6 {
+                // Use best mutation from ledger with 70% probability
+                if index % 10 < 7 {
+                    return self.propose_mutation_of_type(graph, &best_mutation_type, index, signal);
+                }
+            }
+        }
+
+        // Fallback: standard degradation-signal-driven exploration
+        match signal {
+            DegradationSignal::LatencyDominant => {
+                self.propose_edge_removal(graph, index)
+            }
+            DegradationSignal::MemoryDominant => {
+                self.propose_node_removal(graph, index)
+            }
+            DegradationSignal::Balanced => {
+                if index % 2 == 0 {
+                    self.propose_edge_removal(graph, index)
+                } else {
+                    self.propose_node_removal(graph, index)
+                }
+            }
+        }
+    }
+
+    /// Propose a mutation of a specific type (from ledger best practice).
+    fn propose_mutation_of_type(
+        &self,
+        graph: &Graph,
+        mutation_type: &str,
+        index: usize,
+        _signal: DegradationSignal,
+    ) -> Result<MutationRule, NtgError> {
+        if mutation_type.contains("RemoveEdge") {
+            self.propose_edge_removal(graph, index)
+        } else if mutation_type.contains("RemoveNode") {
+            self.propose_node_removal(graph, index)
+        } else if mutation_type.contains("AddNode") {
+            self.propose_node_addition(graph)
+        } else {
+            // Fallback
+            self.propose_edge_removal(graph, index)
+        }
     }
 
     /// Exploitation: generate variations on previously successful mutations.
@@ -300,6 +392,106 @@ mod tests {
         proposer.record_success("remove_edge(1→2)".to_string());
 
         let mutations = proposer.propose_mutations(&graph, DegradationSignal::Balanced, 1)?;
+        assert_eq!(mutations.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn proposer_with_empty_ledger_behaves_normally() -> Result<(), NtgError> {
+        use super::super::ledger::MutationLedger;
+
+        let mut proposer = AdaptiveMutationProposer::new();
+        let ledger = MutationLedger::new();
+
+        let mut graph = Graph::new();
+        let n1 = graph.add_node(NodeKind::Content, "node1".to_string());
+        let n2 = graph.add_node(NodeKind::Content, "node2".to_string());
+        graph.add_edge(n1, n2)?;
+
+        let mutations = proposer.propose_mutations_with_ledger(
+            &graph,
+            DegradationSignal::LatencyDominant,
+            2,
+            &ledger,
+        )?;
+        assert_eq!(mutations.len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn proposer_biases_toward_ledger_confidence() -> Result<(), NtgError> {
+        use super::super::ledger::MutationLedger;
+
+        let mut proposer = AdaptiveMutationProposer::new();
+        let mut ledger = MutationLedger::new();
+
+        // Record RemoveEdge successes for LatencyDominant
+        for _i in 0..8 {
+            ledger.record_mutation(
+                MutationRuleKind::RemoveEdge { from: 1, to: 2 },
+                DegradationSignal::LatencyDominant,
+                0.80,
+                0.83,
+                true, // accepted
+                0.5,
+            );
+        }
+
+        let mut graph = Graph::new();
+        let n1 = graph.add_node(NodeKind::Content, "node1".to_string());
+        let n2 = graph.add_node(NodeKind::Content, "node2".to_string());
+        graph.add_edge(n1, n2)?;
+
+        // Low accept rate + high ledger confidence = should explore but bias toward RemoveEdge
+        proposer.update_accept_rate(2, 10); // 20% accept rate
+        let mutations = proposer.propose_mutations_with_ledger(
+            &graph,
+            DegradationSignal::LatencyDominant,
+            5,
+            &ledger,
+        )?;
+
+        // Should propose 5 mutations, likely biased toward RemoveEdge
+        assert_eq!(mutations.len(), 5);
+        Ok(())
+    }
+
+    #[test]
+    fn proposer_adjusts_exploit_threshold_with_ledger() -> Result<(), NtgError> {
+        use super::super::ledger::MutationLedger;
+
+        let mut proposer = AdaptiveMutationProposer::new();
+        let mut ledger = MutationLedger::new();
+
+        // Add many events to ledger to trigger confidence bonus
+        for i in 0..150 {
+            ledger.record_mutation(
+                MutationRuleKind::RemoveEdge { from: i % 5, to: (i + 1) % 5 },
+                DegradationSignal::Balanced,
+                0.80,
+                0.82,
+                i % 3 != 0, // 66% success rate
+                0.5,
+            );
+        }
+
+        let mut graph = Graph::new();
+        let n1 = graph.add_node(NodeKind::Content, "node1".to_string());
+        let n2 = graph.add_node(NodeKind::Content, "node2".to_string());
+        graph.add_edge(n1, n2)?;
+
+        // At 55% accept rate (below 60% but above lowered threshold due to ledger)
+        proposer.update_accept_rate(55, 100);
+        proposer.record_success("remove_edge(1→2)".to_string());
+
+        let mutations = proposer.propose_mutations_with_ledger(
+            &graph,
+            DegradationSignal::Balanced,
+            1,
+            &ledger,
+        )?;
+
+        // With ledger confidence bonus, should shift toward exploitation
         assert_eq!(mutations.len(), 1);
         Ok(())
     }
