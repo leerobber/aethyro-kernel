@@ -372,8 +372,13 @@ impl NanoKeymaster {
             eprintln!("[health:healing] pruned {} stale edges", pruned.len());
         }
 
-        // Action 2: Determine degradation signal for mutation proposer.
-        let degradation_signal = Some(DegradationSignal::LatencyDominant);
+        // Action 2: Determine degradation signal from real HealthMonitor metrics.
+        let degradation_signal = Some(DegradationSignal::from_metrics(
+            self.health_monitor.baseline_latency_us,
+            self.health_monitor.baseline_memory_bytes,
+            self.health_monitor.current_latency_us,
+            self.health_monitor.current_memory_bytes,
+        ));
 
         // Action 3: Run autonomous improvement loop if degradation is significant.
         if current_efficiency < 0.9 && self.tmg_memory.stats().0 > 0 {
@@ -385,7 +390,7 @@ impl NanoKeymaster {
                 current_efficiency,
                 degradation_signal,
             ) {
-                Ok((_improved_graph, stats)) => {
+                Ok((improved_graph, stats)) => {
                     eprintln!(
                         "[improvement:loop] cycle complete  outcome={:?}  proposed={}  accepted={}  efficiency={:.2}%→{:.2}%",
                         stats.outcome,
@@ -397,6 +402,9 @@ impl NanoKeymaster {
 
                     if stats.mutations_accepted > 0 {
                         eprintln!("[improvement:loop] mutations applied — topology optimized");
+                        // Note: In a full implementation, mutations would be replayed against IntentMemory
+                        // For now, the improved_graph snapshot represents the optimized topology.
+                        // A future phase would implement durability by persisting these mutations.
                     }
                 }
                 Err(e) => {

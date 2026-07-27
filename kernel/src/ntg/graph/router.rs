@@ -142,6 +142,7 @@ impl IntentMemory {
 
     /// Convert intent topology to a Graph for mutation proposals.
     /// Each intent becomes a node; edges represent Hebbian relationships.
+    /// Filters out self-edges to avoid cycles in forward-pass evaluation.
     pub fn current_structure(&self) -> Graph {
         let mut graph = Graph::new();
 
@@ -156,11 +157,14 @@ impl IntentMemory {
         // Note: ForgetEngine doesn't expose edges directly, so this is structural only.
         for (intent_name, _engine) in self.edges.iter() {
             if let Some(from_id) = intent_ids.get(intent_name) {
-                // Add edges to top similar intents.
+                // Add edges to top similar intents (excluding self-edges).
                 let similar = self.find_similar(intent_name, 2);
                 for (other_intent, _) in similar.iter().take(2) {
-                    if let Some(to_id) = intent_ids.get(other_intent) {
-                        let _ = graph.add_edge(*from_id, *to_id);
+                    // Skip self-edges to prevent cycles in forward-pass evaluation
+                    if other_intent != intent_name {
+                        if let Some(to_id) = intent_ids.get(other_intent) {
+                            let _ = graph.add_edge(*from_id, *to_id);
+                        }
                     }
                 }
             }

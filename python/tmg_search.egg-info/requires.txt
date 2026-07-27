@@ -1,0 +1,12 @@
+numpy>=1.20
+numba>=0.56
+
+[bench]
+matplotlib
+scipy
+
+[cuda]
+numba[cuda]
+
+[test]
+pytest>=6.0

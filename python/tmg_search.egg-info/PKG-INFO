@@ -1,0 +1,29 @@
+Metadata-Version: 2.4
+Name: tmg-search
+Version: 0.1.0
+Summary: Ternary Memory Graph similarity search engine
+Author: Aethyro
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Science/Research
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Requires-Python: >=3.8
+Requires-Dist: numpy>=1.20
+Requires-Dist: numba>=0.56
+Provides-Extra: cuda
+Requires-Dist: numba[cuda]; extra == "cuda"
+Provides-Extra: test
+Requires-Dist: pytest>=6.0; extra == "test"
+Provides-Extra: bench
+Requires-Dist: matplotlib; extra == "bench"
+Requires-Dist: scipy; extra == "bench"
+Dynamic: author
+Dynamic: classifier
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
