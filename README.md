@@ -32,15 +32,17 @@ proof matrix, gaps, and next priorities.
 → **[docs/ROADMAP.md](docs/ROADMAP.md)** — phased gates.
 
 **As of 2026-07-27:** pre-alpha research kernel, **capability v10**,
-Phase 0–5 COMPLETE (calib + precision + GraphNode warm-start path), 341
+Phase 0–5 COMPLETE (calib + precision + GraphNode warm-start path), 346
 tests green under `cargo test --release` (the debug-mode CI run and the
 release build both verified, after fixing a wall-clock-rounding test
 failure that only showed up in release), clippy clean, real AVX-512
 VPOPCNTDQ kernel (5.9-7.1× over portable bit-sliced, measured not
-assumed), and a real multi-layer `Runtime::forward_native_parallel`
+assumed), a real multi-layer `Runtime::forward_native_parallel`
 end-to-end benchmark (`gemm_bench`) proven bit-identical to a serial
-reference at up to 1024 nodes/layer × 3 layers. Not benchmarked against
-production aethyro.com inference; no GTM decision.
+reference at up to 1024 nodes/layer × 3 layers, and a first (modest,
+honestly-reported) positive result on learned edge-relatedness weights
+beating the fixed `edge_interaction_score` formula. Not benchmarked
+against production aethyro.com inference; no GTM decision.
 
 ## What's actually new (precise claim)
 

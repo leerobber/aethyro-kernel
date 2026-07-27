@@ -741,3 +741,77 @@ is always nonzero.
 
 `cargo test --release`: 341 passed (confirmed clean including the fixed
 test). `cargo clippy --all-targets --release -- -D warnings`: clean.
+
+## 2026-07-27 — Does *learning* the edge-relatedness weights beat the fixed formula? (Phase 2, follow-up to 2026-07-08)
+
+The 2026-07-08 entry above found `edge_interaction_score` and its
+length-normalized variant don't reliably separate real parent-child edges
+from random node pairs on this repo's real docs, and named the obvious
+untried follow-up: "a genuine relatedness signal probably needs actual
+learned weights ... not a fixed, untrained byte-correlation." This is
+that experiment.
+
+**Built:** `kernel/src/ntg/edge_calib.rs` — a ternary perceptron trained
+directly on real-edge-vs-random-pair labels (same task-framing as
+`calib/mod.rs`'s Phase 4 NodeKind classifier, but deliberately not sharing
+its `Sample`/`ClassMetrics` types or its threshold-search heuristics,
+which were tuned for a different problem and would smuggle in unvalidated
+assumptions here). Feature vector: `encode_fixed(a_label)` concatenated
+with `encode_fixed(b_label)`, each fixed/padded to 64 elements (128-dim
+total) — gives the perceptron independent access to both labels' byte
+patterns instead of forcing the fixed single-dot-product interaction
+shape the old formula used.
+
+**Method:** `cargo run --release --bin edge_relatedness_bench`. Same
+corpus as the original diagnosis (this repo's ADR 0001-0003, DESIGN.md,
+ROADMAP.md — now built natively via `docparse::parse_into` on a real
+`Graph` rather than reimplemented in Python, removing the parity-drift
+risk the original experiment had explicitly worried about), currently
+583 nodes / 578 real edges (grown since 2026-07-08's 491/486 as the docs
+have grown). Real edges = positive class; equal count of deterministic
+random non-adjacent pairs = negative class. 80/20 stratified split,
+25-epoch mistake-driven ternary perceptron (standard update, weights
+clamped to {-1,0,1}), threshold chosen on train to maximize balanced
+accuracy.
+
+**Result — real, and it's a genuine but modest win, not a solved
+problem:**
+
+| classifier | split | accuracy | balanced accuracy |
+|---|---|---:|---:|
+| majority baseline | test | 0.500 | 0.500 |
+| fixed formula (`normalized_edge_interaction_score`, threshold-swept) | resampled negatives, not the exact test split | 0.554 | 0.554 |
+| trained ternary perceptron | train | 0.635 | 0.635 |
+| trained ternary perceptron | **test (held out)** | **0.573** | **0.573** |
+
+The trained classifier beats chance on held-out data by +0.073 balanced
+accuracy, and beats the fixed formula's own (looser, resampled-negative)
+comparison point. That is a real, reproducible signal the fixed formula
+did not have. **But 0.573 balanced accuracy is weak-to-modest, not a
+working relatedness detector** — train (0.635) noticeably outperforms
+test (0.573), consistent with a small 128-dim ternary-weight model
+mostly memorizing rather than generalizing on ~1150 total samples from
+one code+docs corpus. The fixed-formula comparison number is also
+explicitly approximate (recomputed on a freshly resampled negative set,
+not the literal held-out `test` split, since `edge_calib`'s samples don't
+retain the original node ids needed to re-run the old formula on the
+exact same pairs) — treat it as directionally informative, not as a
+tight apples-to-apples number.
+
+**Honest conclusion:** learning the weights is a real, measured
+improvement over a fixed formula, confirming the 2026-07-08 hypothesis —
+but this is not yet a shippable structural-relatedness signal. The gap
+between train and test balanced accuracy points at needing either more
+training data (a bigger real-doc corpus, not just this repo's own ~580
+nodes), richer features than raw byte-position encoding (e.g. actual
+n-gram or structural features), or both, before this is worth wiring
+into anything that makes real decisions. Recorded as a partial Phase 2
+gap closure: `edge_interaction_score` alone remains empirically weak as
+documented 2026-07-08, but "does learning help at all" is now answered
+(yes, modestly) rather than open.
+
+`cargo test --release`: 313 passed (5 new: perceptron converges on
+trivially separable synthetic data, feature-vector length, deterministic
+sampling, matched positive/negative counts on a real doc, baseline
+accuracy bounds). `cargo clippy --all-targets --release -- -D warnings`:
+clean.

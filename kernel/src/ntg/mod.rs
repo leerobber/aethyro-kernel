@@ -4,6 +4,7 @@ pub mod error;
 pub mod fsevents;
 pub mod graph;
 pub mod interaction;
+pub mod edge_calib;
 pub mod leafsignal;
 pub mod glyph;
 pub mod lazyleaf;

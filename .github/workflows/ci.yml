@@ -54,6 +54,10 @@ jobs:
         working-directory: kernel
         run: cargo run --release --bin gemm_bench
 
+      - name: edge relatedness bench smoke
+        working-directory: kernel
+        run: cargo run --release --bin edge_relatedness_bench
+
       - name: cargo clippy
         working-directory: kernel
         run: cargo clippy -- -D warnings
