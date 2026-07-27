@@ -45,7 +45,37 @@ impl DegradationSignal {
     }
 }
 
-/// Adaptive mutation proposer: suggests mutations based on graph structure and degradation type.
+/// Domain classification: different problem types benefit from different mutation strategies.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub enum Domain {
+    /// Ranking/recommendation systems (optimize for relevance + speed).
+    Ranking,
+    /// Classification tasks (optimize for accuracy + latency).
+    Classification,
+    /// Search systems (optimize for recall + throughput).
+    Search,
+    /// General-purpose inference (no domain specialization).
+    Generic,
+}
+
+impl Default for Domain {
+    fn default() -> Self {
+        Domain::Generic
+    }
+}
+
+impl std::fmt::Display for Domain {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Domain::Ranking => write!(f, "ranking"),
+            Domain::Classification => write!(f, "classification"),
+            Domain::Search => write!(f, "search"),
+            Domain::Generic => write!(f, "generic"),
+        }
+    }
+}
+
+/// Adaptive mutation proposer: suggests mutations based on graph structure, degradation type, and domain.
 #[derive(Clone, Debug)]
 pub struct AdaptiveMutationProposer {
     /// Mutations that have succeeded before (bias toward repeating wins).
@@ -106,11 +136,23 @@ impl AdaptiveMutationProposer {
     }
 
     /// Propose mutations with ledger-informed confidence bias.
-    /// Uses learned patterns to prefer mutations that have worked well for this signal type.
+    /// Uses learned patterns to prefer mutations that have worked well for this signal/domain combination.
     pub fn propose_mutations_with_ledger(
         &mut self,
         graph: &Graph,
         signal: DegradationSignal,
+        count: usize,
+        ledger: &MutationLedger,
+    ) -> Result<Vec<MutationRule>, NtgError> {
+        self.propose_mutations_with_domain(graph, signal, Domain::Generic, count, ledger)
+    }
+
+    /// Propose mutations considering signal AND domain specialization.
+    pub fn propose_mutations_with_domain(
+        &mut self,
+        graph: &Graph,
+        signal: DegradationSignal,
+        domain: Domain,
         count: usize,
         ledger: &MutationLedger,
     ) -> Result<Vec<MutationRule>, NtgError> {
@@ -119,8 +161,13 @@ impl AdaptiveMutationProposer {
 
         // Ledger coverage: if we have learned data, shift toward exploitation
         let ledger_events = ledger.events().len();
-        let ledger_confidence_bonus = (ledger_events as f64 / 100.0).min(0.2); // up to +20% from ledger
-        let exploit_threshold = (0.6 - ledger_confidence_bonus).max(0.3); // but never below 30%
+        let domain_specialization = ledger.domain_specialization_score(domain);
+
+        // Adjust confidence bonus based on domain specialization
+        let base_confidence_bonus = (ledger_events as f64 / 100.0).min(0.2);
+        let ledger_confidence_bonus = base_confidence_bonus * (0.5 + 0.5 * domain_specialization);
+
+        let exploit_threshold = (0.6 - ledger_confidence_bonus).max(0.3);
         let exploit = self.accept_rate > exploit_threshold;
 
         for i in 0..count {
@@ -128,8 +175,8 @@ impl AdaptiveMutationProposer {
                 // Exploit: try variations on previous wins, biased by ledger confidence.
                 self.propose_exploitation_mutation(graph, i)?
             } else {
-                // Explore: try targeted mutations, preferring high-confidence types from ledger.
-                self.propose_exploration_mutation_with_confidence(graph, signal, i, ledger)?
+                // Explore: try targeted mutations, preferring domain-signal combinations from ledger.
+                self.propose_exploration_mutation_with_domain(graph, signal, domain, i, ledger)?
             };
             proposals.push(rule);
         }
@@ -174,6 +221,32 @@ impl AdaptiveMutationProposer {
                 }
             }
         }
+    }
+
+    /// Exploration with domain-specialization awareness: prefer domain-signal combinations from ledger.
+    fn propose_exploration_mutation_with_domain(
+        &self,
+        graph: &Graph,
+        signal: DegradationSignal,
+        domain: Domain,
+        index: usize,
+        ledger: &MutationLedger,
+    ) -> Result<MutationRule, NtgError> {
+        // Query ledger for best mutation for this domain+signal combination
+        if let Some(best_mutation_type) = ledger.best_mutation_for_domain_signal(domain, signal) {
+            let confidence = ledger.confidence_for(&best_mutation_type, signal);
+
+            // If high confidence for this domain, bias toward this mutation type
+            if confidence > 0.6 {
+                // Use domain-specific mutation with 80% probability (higher than signal-only)
+                if index % 10 < 8 {
+                    return self.propose_mutation_of_type(graph, &best_mutation_type, index, signal);
+                }
+            }
+        }
+
+        // Fallback: use signal-only guidance
+        self.propose_exploration_mutation_with_confidence(graph, signal, index, ledger)
     }
 
     /// Propose a mutation of a specific type (from ledger best practice).
@@ -430,6 +503,7 @@ mod tests {
             ledger.record_mutation(
                 MutationRuleKind::RemoveEdge { from: 1, to: 2 },
                 DegradationSignal::LatencyDominant,
+                Domain::Generic,
                 0.80,
                 0.83,
                 true, // accepted
@@ -468,6 +542,7 @@ mod tests {
             ledger.record_mutation(
                 MutationRuleKind::RemoveEdge { from: i % 5, to: (i + 1) % 5 },
                 DegradationSignal::Balanced,
+                Domain::Generic,
                 0.80,
                 0.82,
                 i % 3 != 0, // 66% success rate

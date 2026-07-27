@@ -10,7 +10,7 @@
 
 use super::super::graph::Graph;
 use super::super::error::NtgError;
-use super::{MutationCycle, SelfModConfig, AdaptiveMutationProposer, DegradationSignal, MutationLedger};
+use super::{MutationCycle, SelfModConfig, AdaptiveMutationProposer, DegradationSignal, MutationLedger, Domain};
 
 /// Outcome of a self-improvement cycle.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -65,6 +65,8 @@ pub struct LoopController {
     pub efficiency_baseline: f64,
     /// Tamper-evident ledger: records every mutation for learning and analysis.
     pub ledger: MutationLedger,
+    /// Problem domain (for learning domain-specific strategies).
+    pub domain: Domain,
 }
 
 impl LoopController {
@@ -75,7 +77,13 @@ impl LoopController {
             cycle_count: 0,
             efficiency_baseline: 1.0,
             ledger: MutationLedger::new(),
+            domain: Domain::Generic,
         }
+    }
+
+    /// Set the problem domain for learning domain-specific strategies
+    pub fn set_domain(&mut self, domain: Domain) {
+        self.domain = domain;
     }
 
     /// Run one iteration of the self-improvement loop.
@@ -102,10 +110,11 @@ impl LoopController {
 
         let signal = degradation_signal.unwrap();
 
-        // Step 2: Propose mutations (with ledger-informed confidence bias).
-        let proposals = self.proposer.propose_mutations_with_ledger(
+        // Step 2: Propose mutations (with ledger-informed confidence bias and domain awareness).
+        let proposals = self.proposer.propose_mutations_with_domain(
             graph,
             signal,
+            self.domain,
             self.config.max_mutations_per_cycle,
             &self.ledger,
         )?;
@@ -154,6 +163,7 @@ impl LoopController {
             self.ledger.record_mutation(
                 proposal.kind.clone(),
                 signal,
+                self.domain,
                 current_efficiency,
                 new_efficiency,
                 was_accepted,

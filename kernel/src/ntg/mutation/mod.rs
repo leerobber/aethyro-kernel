@@ -21,7 +21,7 @@ pub use multi_axis::{
     MultiAxisFitness, MultiAxisEvaluator, SelectionOutcome as MultiAxisSelectionOutcome,
     proxy_task_from_structure, proxy_biology_from_structure,
 };
-pub use adaptive::{AdaptiveMutationProposer, DegradationSignal};
+pub use adaptive::{AdaptiveMutationProposer, DegradationSignal, Domain};
 pub use loop_controller::{LoopController, LoopOutcome, LoopStats};
 pub use ledger::{MutationLedger, MutationEvent, CohortStats, MutationKnowledge};
 

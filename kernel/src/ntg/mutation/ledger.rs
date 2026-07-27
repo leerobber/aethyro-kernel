@@ -8,7 +8,7 @@
 //! - Domain expertise extraction (rules that generalize)
 
 use super::rules::MutationRuleKind;
-use super::DegradationSignal;
+use super::{DegradationSignal, Domain};
 use super::super::error::NtgError;
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
@@ -22,6 +22,8 @@ pub struct MutationEvent {
     pub mutation: MutationRuleKind,
     /// Degradation signal that triggered proposal
     pub degradation_signal: DegradationSignal,
+    /// Problem domain (for learning domain-specific strategies)
+    pub domain: Domain,
     /// Baseline efficiency before evaluation
     pub baseline_efficiency: f64,
     /// Efficiency after mutation applied
@@ -116,6 +118,7 @@ impl MutationLedger {
         &mut self,
         mutation: MutationRuleKind,
         degradation_signal: DegradationSignal,
+        domain: Domain,
         baseline_efficiency: f64,
         final_efficiency: f64,
         accepted: bool,
@@ -138,6 +141,7 @@ impl MutationLedger {
             event_id,
             mutation: mutation.clone(),
             degradation_signal,
+            domain,
             baseline_efficiency,
             final_efficiency,
             accepted,
@@ -198,6 +202,41 @@ impl MutationLedger {
             .unwrap_or(0.0)
     }
 
+    /// Query: best mutation for domain + signal combination
+    pub fn best_mutation_for_domain_signal(&self, domain: Domain, signal: DegradationSignal) -> Option<String> {
+        let domain_key = format!("{:?}", domain);
+        let signal_key = format!("{:?}", signal);
+        let domain_signal_key = format!("{}:{}", domain_key, signal_key);
+
+        // First try domain-specific signal affinity if available
+        self.knowledge
+            .signal_to_mutation_affinity
+            .get(&domain_signal_key)
+            .and_then(|v| v.first())
+            .map(|(mutation_type, _)| mutation_type.clone())
+            .or_else(|| self.best_mutation_for_signal(signal))
+    }
+
+    /// Query: effectiveness of mutations in a specific domain
+    pub fn effectiveness_for_domain(&self, domain: Domain) -> Option<CohortStats> {
+        let domain_key = format!("{:?}", domain);
+        self.knowledge.by_mutation_type.get(&domain_key).cloned()
+    }
+
+    /// Query: domain specialization bonus (how domain-specific our knowledge is)
+    pub fn domain_specialization_score(&self, domain: Domain) -> f64 {
+        let domain_key = format!("{:?}", domain);
+        let domain_events = self.events.iter().filter(|e| format!("{:?}", e.domain) == domain_key).count();
+
+        let total_events = self.events.len();
+        if total_events == 0 {
+            return 0.0;
+        }
+
+        // Specialization score: ratio of domain-specific events
+        (domain_events as f64 / total_events as f64).min(1.0)
+    }
+
     /// Recompute knowledge from events
     fn recompute_knowledge(&mut self) {
         // Clear and rebuild
@@ -256,6 +295,40 @@ impl MutationLedger {
             self.knowledge
                 .signal_to_mutation_affinity
                 .insert(signal_key, affinities);
+        }
+
+        // Domain-signal affinity: per-domain per-signal mutation effectiveness
+        let mut by_domain_signal: HashMap<String, Vec<&MutationEvent>> = HashMap::new();
+        for event in &self.events {
+            let domain_key = format!("{:?}", event.domain);
+            let signal_key = format!("{:?}", event.degradation_signal);
+            let combined_key = format!("{}:{}", domain_key, signal_key);
+            by_domain_signal.entry(combined_key).or_default().push(event);
+        }
+
+        for (domain_signal_key, cohort) in by_domain_signal {
+            let mut type_scores: HashMap<String, (f64, usize)> = HashMap::new();
+
+            for event in &cohort {
+                let type_key = format!("{:?}", event.mutation);
+                let score = if event.was_success() { 1.0 } else { 0.0 };
+                let entry = type_scores.entry(type_key).or_insert((0.0, 0));
+                entry.0 += score;
+                entry.1 += 1;
+            }
+
+            let mut affinities: Vec<(String, f64)> = type_scores
+                .into_iter()
+                .map(|(mutation_type, (successes, total))| {
+                    let success_rate = successes / total as f64;
+                    (mutation_type, success_rate)
+                })
+                .collect();
+
+            affinities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+            self.knowledge
+                .signal_to_mutation_affinity
+                .insert(domain_signal_key, affinities);
         }
 
         // Phase analysis (early/mid/late cycles)
@@ -477,6 +550,7 @@ mod tests {
                 to: 2,
             },
             DegradationSignal::LatencyDominant,
+                Domain::Generic,
             0.80,
             0.85,
             true,
@@ -498,6 +572,7 @@ mod tests {
                     to: i + 1,
                 },
                 DegradationSignal::LatencyDominant,
+                Domain::Generic,
                 0.80,
                 0.80 + efficiency_delta,
                 accepted,
@@ -522,6 +597,7 @@ mod tests {
                     to: 2,
                 },
                 DegradationSignal::LatencyDominant,
+                Domain::Generic,
                 0.75,
                 0.82,
                 true,
@@ -534,6 +610,7 @@ mod tests {
             ledger.record_mutation(
                 MutationRuleKind::RemoveNode { node_id: 5 },
                 DegradationSignal::LatencyDominant,
+                Domain::Generic,
                 0.75,
                 0.74,
                 false,
@@ -558,6 +635,7 @@ mod tests {
                     to: i + 1,
                 },
                 DegradationSignal::Balanced,
+                Domain::Generic,
                 0.80,
                 0.80 + delta,
                 delta > 0.0,
@@ -581,6 +659,7 @@ mod tests {
                     to: i + 1,
                 },
                 DegradationSignal::LatencyDominant,
+                Domain::Generic,
                 0.80,
                 0.83,
                 true,
@@ -606,6 +685,7 @@ mod tests {
                     to: 2,
                 },
                 DegradationSignal::LatencyDominant,
+                Domain::Generic,
                 0.80,
                 0.82,
                 true,
@@ -622,6 +702,7 @@ mod tests {
                     to: 2,
                 },
                 DegradationSignal::LatencyDominant,
+                Domain::Generic,
                 0.82,
                 0.85,
                 true,
@@ -638,6 +719,7 @@ mod tests {
                     to: 2,
                 },
                 DegradationSignal::LatencyDominant,
+                Domain::Generic,
                 0.85,
                 0.86,
                 true,
@@ -662,6 +744,7 @@ mod tests {
                     to: 2,
                 },
                 DegradationSignal::LatencyDominant,
+                Domain::Generic,
                 0.60,
                 0.65,
                 true,
@@ -677,6 +760,7 @@ mod tests {
                     to: 2,
                 },
                 DegradationSignal::LatencyDominant,
+                Domain::Generic,
                 0.90,
                 0.92,
                 true,
@@ -706,6 +790,7 @@ mod tests {
                     to: 2,
                 },
                 DegradationSignal::LatencyDominant,
+                Domain::Generic,
                 0.75,
                 if i < 8 { 0.80 } else { 0.74 },
                 i < 8,
@@ -726,6 +811,7 @@ mod tests {
             ledger.record_mutation(
                 MutationRuleKind::RemoveNode { node_id: i },
                 DegradationSignal::MemoryDominant,
+                Domain::Generic,
                 0.75,
                 0.78 + (i as f64 * 0.01),
                 i % 2 == 0,
@@ -771,6 +857,7 @@ mod tests {
             ledger.record_mutation(
                 MutationRuleKind::RemoveEdge { from: 1, to: 2 },
                 DegradationSignal::LatencyDominant,
+                Domain::Generic,
                 0.80,
                 0.81,
                 i < 4, // 4/5 successful
