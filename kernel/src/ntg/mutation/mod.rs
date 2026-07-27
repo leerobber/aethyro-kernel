@@ -13,11 +13,15 @@ pub mod rules;
 pub mod evaluator;
 pub mod budget;
 pub mod multi_axis;
+pub mod adaptive;
+pub mod loop_controller;
 
 pub use multi_axis::{
     MultiAxisFitness, MultiAxisEvaluator, SelectionOutcome as MultiAxisSelectionOutcome,
     proxy_task_from_structure, proxy_biology_from_structure,
 };
+pub use adaptive::{AdaptiveMutationProposer, DegradationSignal};
+pub use loop_controller::{LoopController, LoopOutcome, LoopStats};
 
 use super::error::NtgError;
 use super::graph::Graph;

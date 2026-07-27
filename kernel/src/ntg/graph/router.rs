@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use super::hypervector::HyperVector;
 use super::forget::ForgetEngine;
+use super::{Graph, NodeKind};
 
 /// Intent routing with structural memory: each intent has a hypervector
 /// that grows through Hebbian learning as the agent encounters related requests.
@@ -137,6 +138,35 @@ impl IntentMemory {
         let total_intents = self.hypervectors.len();
         let total_edges: usize = self.edges.values().map(|e| e.edge_count()).sum();
         (total_intents, total_edges)
+    }
+
+    /// Convert intent topology to a Graph for mutation proposals.
+    /// Each intent becomes a node; edges represent Hebbian relationships.
+    pub fn current_structure(&self) -> Graph {
+        let mut graph = Graph::new();
+
+        // Create a node for each intent.
+        let mut intent_ids = HashMap::new();
+        for intent_name in self.hypervectors.keys() {
+            let node_id = graph.add_node(NodeKind::Content, intent_name.clone());
+            intent_ids.insert(intent_name.clone(), node_id);
+        }
+
+        // Add edges for Hebbian relationships (if available).
+        // Note: ForgetEngine doesn't expose edges directly, so this is structural only.
+        for (intent_name, _engine) in self.edges.iter() {
+            if let Some(from_id) = intent_ids.get(intent_name) {
+                // Add edges to top similar intents.
+                let similar = self.find_similar(intent_name, 2);
+                for (other_intent, _) in similar.iter().take(2) {
+                    if let Some(to_id) = intent_ids.get(other_intent) {
+                        let _ = graph.add_edge(*from_id, *to_id);
+                    }
+                }
+            }
+        }
+
+        graph
     }
 }
 

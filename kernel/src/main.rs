@@ -22,6 +22,7 @@ use ntg_kernel::ntg::calib::{calibrate, fixture_documents, samples_from_document
 use ntg_kernel::ntg::ledger::{FitnessMeasure, MutationOutcome, TamperEvidentLedger};
 use ntg_kernel::ntg::ledger::replay::ExecutionTrace;
 use ntg_kernel::ntg::graph::IntentMemory;
+use ntg_kernel::ntg::mutation::{LoopController, SelfModConfig, DegradationSignal};
 use ntg_kernel::{HealthMonitor, TrendSignal};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -90,6 +91,8 @@ struct NanoKeymaster {
     tmg_memory: IntentMemory,
     /// Health monitor: detects degradation and triggers self-healing.
     health_monitor: HealthMonitor,
+    /// Autonomous self-improvement loop controller: proposes mutations when degradation detected.
+    improvement_loop: LoopController,
     /// External backend URL, if configured. Credential vault.
     external_url: Option<String>,
     call_counter: u64,
@@ -97,11 +100,19 @@ struct NanoKeymaster {
 
 impl NanoKeymaster {
     fn new(model: CalibModel, external_url: Option<String>) -> Self {
+        let improvement_config = SelfModConfig {
+            enabled: true,
+            cycle_budget_us: 500_000, // 500ms per cycle
+            max_mutations_per_cycle: 3,
+            fitness_improvement_threshold: 1.01, // 1% improvement required
+            auto_rollback_on_regression: true,
+        };
         Self {
             ledger: TamperEvidentLedger::new(None).expect("ledger init"),
             memory: HashMap::new(),
             tmg_memory: IntentMemory::new(),
             health_monitor: HealthMonitor::new(100, 1_000_000), // 100 µs baseline, 1MB baseline memory
+            improvement_loop: LoopController::new(improvement_config),
             external_url,
             call_counter: 0,
             model,
@@ -343,19 +354,58 @@ impl NanoKeymaster {
     }
 
     /// Self-healing: detect degradation and take corrective actions.
-    /// Triggered when efficiency drops below baseline.
+    /// Triggers autonomous mutation cycle when efficiency drops.
     fn heal_topology(&mut self) {
         let trend = self.health_monitor.efficiency_trend();
-        eprintln!("[health:healing] triggered — trend: {:?}", trend);
+        let current_efficiency = self.health_monitor.current_efficiency();
 
-        // Action 1: Prune weak edges below 0.15 threshold
+        eprintln!(
+            "[health:healing] triggered — trend: {:?}, efficiency: {:.2}%",
+            trend,
+            current_efficiency * 100.0
+        );
+
+        // Action 1: Prune weak edges in TMG (fast, low-cost recovery).
         eprintln!("[health:healing] pruning weak edges (threshold < 0.15)");
         let pruned = self.tmg_memory.prune_stale_edges();
         if !pruned.is_empty() {
             eprintln!("[health:healing] pruned {} stale edges", pruned.len());
         }
 
-        // Action 2: Check if we should enter conservative mode (both latency & memory high)
+        // Action 2: Determine degradation signal for mutation proposer.
+        let degradation_signal = Some(DegradationSignal::LatencyDominant);
+
+        // Action 3: Run autonomous improvement loop if degradation is significant.
+        if current_efficiency < 0.9 && self.tmg_memory.stats().0 > 0 {
+            eprintln!("[improvement:loop] starting autonomous mutation cycle");
+            // Create a graph representing the intent topology for mutation proposals.
+            let intent_graph = self.tmg_memory.current_structure();
+            match self.improvement_loop.step(
+                &intent_graph,
+                current_efficiency,
+                degradation_signal,
+            ) {
+                Ok((_improved_graph, stats)) => {
+                    eprintln!(
+                        "[improvement:loop] cycle complete  outcome={:?}  proposed={}  accepted={}  efficiency={:.2}%→{:.2}%",
+                        stats.outcome,
+                        stats.mutations_proposed,
+                        stats.mutations_accepted,
+                        stats.baseline_efficiency * 100.0,
+                        stats.final_efficiency * 100.0
+                    );
+
+                    if stats.mutations_accepted > 0 {
+                        eprintln!("[improvement:loop] mutations applied — topology optimized");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[improvement:loop] cycle failed: {}", e);
+                }
+            }
+        }
+
+        // Action 4: Check if we should enter conservative mode (both latency & memory high).
         if self.health_monitor.should_enter_conservative_mode() {
             self.health_monitor.set_conservative_mode(true);
             eprintln!(
