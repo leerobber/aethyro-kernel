@@ -12,7 +12,8 @@ use super::super::graph::Graph;
 use super::super::error::NtgError;
 use super::{
     MutationCycle, SelfModConfig, AdaptiveMutationProposer, DegradationSignal, MutationLedger, Domain,
-    InterdomainAffinityGraph, PatternExtractor, StrategyDiscoveryEngine,
+    InterdomainAffinityGraph, PatternExtractor, StrategyDiscoveryEngine, TemporalLearningEngine,
+    CausalityInferenceEngine, PortfolioLearningEngine, KnowledgeDistillationEngine,
 };
 
 /// Outcome of a self-improvement cycle.
@@ -74,6 +75,14 @@ pub struct LoopController {
     pub affinity_graph: InterdomainAffinityGraph,
     /// Autonomous strategy discovery engine for novel hypothesis generation.
     pub discovery_engine: StrategyDiscoveryEngine,
+    /// Temporal learning: track how mutation effectiveness changes over time.
+    pub temporal_engine: TemporalLearningEngine,
+    /// Causality inference: learn causal relationships between mutations and improvements.
+    pub causality_engine: CausalityInferenceEngine,
+    /// Portfolio learning: manage diversified strategy portfolio.
+    pub portfolio_engine: PortfolioLearningEngine,
+    /// Knowledge distillation: compress learned knowledge into rules.
+    pub distillation_engine: KnowledgeDistillationEngine,
 }
 
 impl LoopController {
@@ -88,6 +97,10 @@ impl LoopController {
             domain: Domain::Generic,
             discovery_engine: StrategyDiscoveryEngine::new(affinity_graph.clone()),
             affinity_graph,
+            temporal_engine: TemporalLearningEngine::new(),
+            causality_engine: CausalityInferenceEngine::new(),
+            portfolio_engine: PortfolioLearningEngine::new(),
+            distillation_engine: KnowledgeDistillationEngine::new(),
         }
     }
 
@@ -176,6 +189,36 @@ impl LoopController {
                 // Apply to working graph.
                 proposal.apply(&mut best_graph)?;
                 best_efficiency = new_efficiency;
+
+                // Phase 6.10: Record mutation for continuous learning
+                // Temporal learning: track effectiveness over time
+                self.temporal_engine.record_mutation(
+                    self.cycle_count,
+                    self.domain,
+                    proposal.kind.clone(),
+                    current_efficiency,
+                    new_efficiency,
+                    true,
+                    current_efficiency,
+                );
+
+                // Causality inference: record as isolated intervention
+                self.causality_engine.record_intervention(
+                    proposal.kind.clone(),
+                    current_efficiency,
+                    new_efficiency,
+                    true,
+                    vec![],
+                    0.0,
+                );
+
+                // Portfolio learning: record strategy result
+                self.portfolio_engine.add_strategy_result(
+                    proposal.description(),
+                    vec![proposal.description()],
+                    self.domain,
+                    new_efficiency - current_efficiency,
+                );
 
                 // Extract and record patterns for cross-domain transfer learning.
                 // This enables patterns learned in one domain to transfer to others.
@@ -278,6 +321,40 @@ impl LoopController {
             .take(5)
             .map(|(pattern, rate)| format!("{}: {:.1}%", pattern, rate * 100.0))
             .collect()
+    }
+
+    /// Get temporal learning report (Phase 6.10)
+    pub fn temporal_learning_report(&self) -> String {
+        self.temporal_engine.report()
+    }
+
+    /// Get causality inference report (Phase 6.10)
+    pub fn causality_inference_report(&self) -> String {
+        self.causality_engine.report()
+    }
+
+    /// Get portfolio learning report (Phase 6.10)
+    pub fn portfolio_learning_report(&self) -> String {
+        self.portfolio_engine.report()
+    }
+
+    /// Get knowledge distillation report (Phase 6.10)
+    pub fn knowledge_distillation_report(&self) -> String {
+        self.distillation_engine.report()
+    }
+
+    /// Get comprehensive continuous learning report (Phase 6.10)
+    pub fn continuous_learning_report(&self) -> String {
+        let mut report = String::from("=== Phase 6.10: Continuous Learning Report ===\n\n");
+        report.push_str("--- Temporal Learning ---\n");
+        report.push_str(&self.temporal_learning_report());
+        report.push_str("\n--- Causality Inference ---\n");
+        report.push_str(&self.causality_inference_report());
+        report.push_str("\n--- Portfolio Learning ---\n");
+        report.push_str(&self.portfolio_learning_report());
+        report.push_str("\n--- Knowledge Distillation ---\n");
+        report.push_str(&self.knowledge_distillation_report());
+        report
     }
 }
 

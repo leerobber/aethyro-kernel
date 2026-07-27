@@ -19,6 +19,10 @@ pub mod ledger;
 pub mod design_and_marketing;
 pub mod transfer_learning;
 pub mod strategy_discovery;
+pub mod temporal_learning;
+pub mod causality_inference;
+pub mod portfolio_learning;
+pub mod knowledge_distillation;
 
 pub use multi_axis::{
     MultiAxisFitness, MultiAxisEvaluator, SelectionOutcome as MultiAxisSelectionOutcome,
@@ -35,6 +39,18 @@ pub use transfer_learning::{
 };
 pub use strategy_discovery::{
     HypothesizedStrategy, HypothesisSource, StrategyDiscoveryEngine,
+};
+pub use temporal_learning::{
+    TemporalLearningEngine, TemporalMutationRecord, OptimizationPhase, TemporalPattern,
+};
+pub use causality_inference::{
+    CausalityInferenceEngine, CausalEffect, InterventionRecord,
+};
+pub use portfolio_learning::{
+    PortfolioLearningEngine, PortfolioEntry, InteractionEffect,
+};
+pub use knowledge_distillation::{
+    KnowledgeDistillationEngine, DistilledRule, MetaPattern, RuleCondition, RuleAction,
 };
 
 use super::error::NtgError;
