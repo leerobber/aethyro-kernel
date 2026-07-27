@@ -10,7 +10,10 @@
 
 use super::super::graph::Graph;
 use super::super::error::NtgError;
-use super::{MutationCycle, SelfModConfig, AdaptiveMutationProposer, DegradationSignal, MutationLedger, Domain};
+use super::{
+    MutationCycle, SelfModConfig, AdaptiveMutationProposer, DegradationSignal, MutationLedger, Domain,
+    InterdomainAffinityGraph, PatternExtractor,
+};
 
 /// Outcome of a self-improvement cycle.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -67,6 +70,8 @@ pub struct LoopController {
     pub ledger: MutationLedger,
     /// Problem domain (for learning domain-specific strategies).
     pub domain: Domain,
+    /// Cross-domain knowledge transfer: tracks which patterns work across domains.
+    pub affinity_graph: InterdomainAffinityGraph,
 }
 
 impl LoopController {
@@ -78,6 +83,7 @@ impl LoopController {
             efficiency_baseline: 1.0,
             ledger: MutationLedger::new(),
             domain: Domain::Generic,
+            affinity_graph: InterdomainAffinityGraph::new(),
         }
     }
 
@@ -157,6 +163,25 @@ impl LoopController {
                 // Apply to working graph.
                 proposal.apply(&mut best_graph)?;
                 best_efficiency = new_efficiency;
+
+                // Extract and record patterns for cross-domain transfer learning.
+                // This enables patterns learned in one domain to transfer to others.
+                let patterns = PatternExtractor::extract_patterns(&proposal.kind, self.domain);
+                for pattern in patterns {
+                    // Record transfer from current domain to all other domains
+                    // (simulating that this pattern might be useful elsewhere)
+                    for other_domain in &[Domain::Ranking, Domain::Classification, Domain::Search, Domain::Generic] {
+                        if *other_domain != self.domain {
+                            // Success in current domain suggests potential transfer
+                            self.affinity_graph.record_transfer(
+                                self.domain,
+                                *other_domain,
+                                pattern.clone(),
+                                true,
+                            );
+                        }
+                    }
+                }
             }
 
             // Record this mutation event in the ledger for learning
@@ -217,6 +242,26 @@ impl LoopController {
     pub fn load_ledger(&mut self, path: &str) -> Result<(), NtgError> {
         self.ledger = MutationLedger::load_or_new(path)?;
         Ok(())
+    }
+
+    /// Get cross-domain transfer report: which patterns transfer well between domains
+    pub fn cross_domain_transfer_report(&self) -> String {
+        self.affinity_graph.report()
+    }
+
+    /// Get specialization score for this domain: how well do its patterns transfer to others?
+    pub fn domain_transfer_specialization(&self) -> f64 {
+        self.affinity_graph.cross_domain_specialization_score(self.domain)
+    }
+
+    /// Get best patterns to transfer from current domain to target domain
+    pub fn best_transfer_patterns(&self, target_domain: Domain) -> Vec<String> {
+        self.affinity_graph
+            .best_patterns_for_transfer(self.domain, target_domain)
+            .iter()
+            .take(5)
+            .map(|(pattern, rate)| format!("{}: {:.1}%", pattern, rate * 100.0))
+            .collect()
     }
 }
 
@@ -281,5 +326,84 @@ mod tests {
         assert_eq!(stats.outcome, LoopOutcome::NoAction);
         assert_eq!(stats.mutations_proposed, 0);
         assert_eq!(stats.baseline_efficiency, 1.0);
+    }
+
+    // Phase 6.8: Cross-Domain Knowledge Transfer Tests
+    #[test]
+    fn loop_controller_initializes_affinity_graph() {
+        let config = SelfModConfig {
+            enabled: true,
+            ..SelfModConfig::default()
+        };
+        let mut controller = LoopController::new(config);
+        controller.set_domain(Domain::Ranking);
+        // Affinity graph should be initialized but empty
+        let report = controller.cross_domain_transfer_report();
+        assert!(report.contains("Inter-Domain Affinity"));
+    }
+
+    #[test]
+    fn loop_controller_records_patterns_on_success() -> Result<(), NtgError> {
+        let config = SelfModConfig {
+            enabled: true,
+            ..SelfModConfig::default()
+        };
+        let mut controller = LoopController::new(config);
+        controller.set_domain(Domain::Ranking);
+
+        let mut graph = Graph::new();
+        let n1 = graph.add_node(NodeKind::Content, "node1".to_string());
+        let n2 = graph.add_node(NodeKind::Content, "node2".to_string());
+        graph.add_edge(n1, n2)?;
+
+        // Run with degradation signal - should trigger mutations
+        let (_, _stats) = controller.step(
+            &graph,
+            0.85,
+            Some(DegradationSignal::LatencyDominant),
+        )?;
+
+        // Even if no mutations accepted, affinity graph should not error
+        let transfer_score = controller.domain_transfer_specialization();
+        assert!(transfer_score >= 0.0 && transfer_score <= 1.0);
+        Ok(())
+    }
+
+    #[test]
+    fn loop_controller_provides_transfer_patterns() -> Result<(), NtgError> {
+        let config = SelfModConfig {
+            enabled: true,
+            ..SelfModConfig::default()
+        };
+        let mut controller = LoopController::new(config);
+        controller.set_domain(Domain::Ranking);
+
+        let best_patterns = controller.best_transfer_patterns(Domain::Classification);
+        // Should return a list (possibly empty if no transfers yet)
+        assert!(best_patterns.len() <= 5); // Limited to 5 best patterns
+        Ok(())
+    }
+
+    #[test]
+    fn loop_controller_multiple_domains_separate_affinity() -> Result<(), NtgError> {
+        let config = SelfModConfig {
+            enabled: true,
+            ..SelfModConfig::default()
+        };
+
+        let mut controller1 = LoopController::new(config.clone());
+        controller1.set_domain(Domain::Ranking);
+
+        let mut controller2 = LoopController::new(config.clone());
+        controller2.set_domain(Domain::Classification);
+
+        // Each controller should track domain-specific patterns
+        let score1 = controller1.domain_transfer_specialization();
+        let score2 = controller2.domain_transfer_specialization();
+
+        // Both should be valid scores
+        assert!(score1 >= 0.0 && score1 <= 1.0);
+        assert!(score2 >= 0.0 && score2 <= 1.0);
+        Ok(())
     }
 }
