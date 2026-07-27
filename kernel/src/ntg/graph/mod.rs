@@ -12,9 +12,11 @@
 
 pub mod node;
 pub mod hypervector;
+pub mod forget;
 
 pub use node::GraphNode;
 pub use hypervector::HyperVector;
+pub use forget::ForgetEngine;
 
 use std::cmp::Reverse;
 use std::collections::hash_map::DefaultHasher;

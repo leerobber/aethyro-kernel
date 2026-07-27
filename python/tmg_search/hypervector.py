@@ -104,20 +104,32 @@ class HyperVector:
         if not vectors:
             return HyperVector.zero()
 
-        pos_sum = np.zeros(HyperVector.WORDS, dtype=np.uint64)
-        neg_sum = np.zeros(HyperVector.WORDS, dtype=np.uint64)
+        result_pos = np.zeros(HyperVector.WORDS, dtype=np.uint64)
+        result_neg = np.zeros(HyperVector.WORDS, dtype=np.uint64)
 
-        # Sum all bit positions
-        for vec in vectors:
-            pos_sum += np.unpackbits(vec.pos)
-            neg_sum += np.unpackbits(vec.neg)
+        threshold = len(vectors) // 2  # Strict majority: >50%
 
-        # Threshold: more than half the vectors have this bit set
-        threshold = len(vectors) // 2 + 1
+        # Majority vote at bit level: iterate through each bit position
+        for word_idx in range(HyperVector.WORDS):
+            for bit_idx in range(64):
+                pos_votes = 0
+                neg_votes = 0
 
-        # Reconstruct from majority-vote bits
-        result_pos = np.packbits((pos_sum >= threshold).astype(np.uint8))
-        result_neg = np.packbits((neg_sum >= threshold).astype(np.uint8))
+                # Count votes for this bit position across all vectors
+                for vec in vectors:
+                    pos_set = bool((vec.pos[word_idx] >> bit_idx) & 1)
+                    neg_set = bool((vec.neg[word_idx] >> bit_idx) & 1)
+
+                    if pos_set:
+                        pos_votes += 1
+                    if neg_set:
+                        neg_votes += 1
+
+                # Majority vote: if more vectors have this bit set, set it in result
+                if pos_votes > threshold:
+                    result_pos[word_idx] |= np.uint64(1) << bit_idx
+                if neg_votes > threshold:
+                    result_neg[word_idx] |= np.uint64(1) << bit_idx
 
         return HyperVector(result_pos, result_neg)
 

@@ -9,20 +9,24 @@ use crate::ntg::error::NtgError;
 use crate::ntg::ledger::TamperEvidentLedger;
 use crate::ntg::storage::SparseBitSlicedTernary;
 use super::hypervector::HyperVector;
+use super::forget::ForgetEngine;
 
 /// One layer-side compute unit: dense sequential `id` + sparse ternary weights.
 ///
 /// Ingest contract: within a layer, `node.id == index` (see `tools/ingest.py`
 /// and [`crate::ntg::runtime::validate_sequential_ids`]).
 ///
-/// Extended with optional HyperVector for Ternary Memory Graph (TMG):
-/// stores structural memory as high-dimensional ternary vectors.
+/// Extended with:
+/// - Optional HyperVector for Ternary Memory Graph (TMG): stores structural memory as high-dimensional ternary vectors.
+/// - Optional ForgetEngine for Hebbian learning and time-decay edge pruning: manages edge lifecycle without retraining.
 #[derive(Clone, Debug)]
 pub struct GraphNode {
     pub id: usize,
     pub weights: SparseBitSlicedTernary,
     /// Optional hypervector for structural memory; none until assigned.
     pub hypervector: Option<HyperVector>,
+    /// Optional forget engine for Hebbian learning and edge decay; none until initialized.
+    pub forget_engine: Option<ForgetEngine>,
 }
 
 impl GraphNode {
@@ -31,6 +35,7 @@ impl GraphNode {
             id,
             weights: SparseBitSlicedTernary::new(weight_len),
             hypervector: None,
+            forget_engine: None,
         }
     }
 
@@ -39,6 +44,7 @@ impl GraphNode {
             id,
             weights,
             hypervector: None,
+            forget_engine: None,
         }
     }
 
@@ -57,6 +63,25 @@ impl GraphNode {
     /// Get the hypervector, creating a zero vector if none exists.
     pub fn hypervector_or_zero(&self) -> HyperVector {
         self.hypervector.clone().unwrap_or_else(HyperVector::zero)
+    }
+
+    /// Initialize or replace the forget engine (Hebbian learning + time-decay edge pruning).
+    pub fn with_forget_engine(mut self, engine: ForgetEngine) -> Self {
+        self.forget_engine = Some(engine);
+        self
+    }
+
+    /// Get mutable reference to forget engine; initializes default if none exists.
+    pub fn forget_engine_mut(&mut self) -> &mut ForgetEngine {
+        if self.forget_engine.is_none() {
+            self.forget_engine = Some(ForgetEngine::default());
+        }
+        self.forget_engine.as_mut().unwrap()
+    }
+
+    /// Get immutable reference to forget engine, or None if not initialized.
+    pub fn forget_engine_ref(&self) -> Option<&ForgetEngine> {
+        self.forget_engine.as_ref()
     }
 
     /// Ledgered weight update; may trigger lazy sparse compact.
@@ -127,5 +152,24 @@ mod tests {
         let hv = HyperVector::random();
         let node = GraphNode::new(0, 128).with_hypervector(hv.clone());
         assert_eq!(node.hypervector.as_ref().unwrap(), &hv);
+    }
+
+    #[test]
+    fn forget_engine_initializes_on_demand() {
+        let mut node = GraphNode::new(0, 128);
+        assert!(node.forget_engine_ref().is_none());
+        let _ = node.forget_engine_mut();
+        assert!(node.forget_engine_ref().is_some());
+    }
+
+    #[test]
+    fn forget_engine_fire_together_and_get_weight() {
+        let mut node = GraphNode::new(0, 128);
+        let engine = node.forget_engine_mut();
+        engine.fire_together(0, 1, 1000);
+        engine.fire_together(0, 1, 1001);
+        let w = engine.get_weight(0, 1, 1001);
+        assert!(w.is_some());
+        assert!(w.unwrap() > 0.1);
     }
 }
