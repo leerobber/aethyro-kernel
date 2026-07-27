@@ -43,6 +43,10 @@ name = "gemm_bench"
 path = "src/bin/gemm_bench.rs"
 
 [[bin]]
+name = "edge_relatedness_bench"
+path = "src/bin/edge_relatedness_bench.rs"
+
+[[bin]]
 name = "phase4_calib"
 path = "src/bin/phase4_calib.rs"
 

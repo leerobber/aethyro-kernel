@@ -13,7 +13,7 @@ before starting the next phase. No exceptions, no "we'll fix the tests
 later." A phase that isn't green isn't done, regardless of how much code
 exists for it.
 
-**Test baseline (2026-07-27):** 341 automated tests green (308 unit + 33
+**Test baseline (2026-07-27):** 346 automated tests green (313 unit + 33
 integration, `cargo test` in `kernel/`). `cargo clippy -- -D warnings`
 clean. Capability report version **10** (Phase 5 optimization complete).
 

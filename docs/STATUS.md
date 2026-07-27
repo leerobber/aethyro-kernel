@@ -51,10 +51,10 @@ do not start N+1 until N is certified.
 
 | Check | Result |
 |-------|--------|
-| `cargo test` (kernel) | 308 unit + 33 integration = 341, all green (capability v10; calib model/sparse/compare tests included) |
+| `cargo test` (kernel) | 313 unit + 33 integration = 346, all green (capability v10; calib model/sparse/compare tests included) |
 | `cargo build --release` | Success (`libntg_kernel.{so,rlib}`, `phase4_calib`, benches) |
 | `cargo clippy -- -D warnings` | Clean (exit 0) |
-| CI | `.github/workflows/ci.yml`: test (debug + `--release`) + phase4 smoke + model roundtrip + density_bench + gemm_bench + clippy |
+| CI | `.github/workflows/ci.yml`: test (debug + `--release`) + phase4 smoke + model roundtrip + density_bench + gemm_bench + edge_relatedness_bench + clippy |
 | Host hardware (audit machine) | x86_64 with AVX2 + AVX-512F/VPOPCNTDQ advertised — VPOPCNTDQ now actually used by `bit_sliced_avx512` |
 
 ---
@@ -143,7 +143,7 @@ do not start N+1 until N is certified.
 | GraphNode + sparse weights for native runtime | ✅ |
 | Lazy glyph / PIXEL-lite | ❌ design only (ADR 0003) |
 | Forward-pass overhead vs static baseline (measured) | ✅ **DONE 2026-07-09** — `graph_overhead_bench`: ~10.5× on an 8-node graph (sub-microsecond absolute cost either way; not a ternary TOBL cost, pure structural/topo overhead) — see EXPERIMENTS.md. This table had gone stale claiming it was still open; corrected 2026-07-27. |
-| Edge interaction as structural relatedness | ❌ empirically weak (see EXPERIMENTS) |
+| Edge interaction as structural relatedness | ⚠️ **partially explored 2026-07-27** — fixed formula still empirically weak (2026-07-08); a trained ternary perceptron on the same real-doc corpus beats chance by +0.073 balanced accuracy and beats the fixed formula, but only reaches 0.573 test balanced accuracy (0.635 train) — a real, modest signal that learning helps, not a working relatedness detector yet. See EXPERIMENTS.md. |
 
 ### Phase 3 — Self-mod + ledger — **DONE for ADR 0002 rails**
 | Rail | Status |
@@ -179,13 +179,13 @@ decision remain later — see [ROADMAP.md](ROADMAP.md) Phase 6.
 
 | Suite | Count | What it proves |
 |-------|------:|----------------|
-| Unit (`--lib`) | 308 | Core algorithms, ledger, mutation (incl. Rung 2 multi-axis), storage (incl. AVX-512 vs. portable bit-identity), runtime, graph, accel, `genomic/` sovereign-brain chain |
+| Unit (`--lib`) | 313 | Core algorithms, ledger, mutation (incl. Rung 2 multi-axis), storage (incl. AVX-512 vs. portable bit-identity), runtime, graph, accel, `genomic/` sovereign-brain chain, edge-relatedness perceptron |
 | `phase1_2_3_simd_ffi` | 11 | SIMD parity, FFI, OpStats |
 | `phase1_2_3_storage_integration` | 10 | PackedTernary + TOBL + ledger glue |
 | `phase3_integration` | 7 | All five ADR 0002 rails end-to-end |
 | `self_parse` | 3 | Real repo docs parse without panic |
 | `sovereign_integration` | 2 | LTM motif activation, train/prune acceptance bias |
-| **Total** | **341** | |
+| **Total** | **346** | |
 
 ### Known test honesty notes
 - Sparse `ternary_matmul` is **chunk-level score → ±1 gate**, not full dense GEMM.
@@ -258,6 +258,15 @@ stubs were deleted 2026-07-26 — they carried no content beyond "see STATUS.md.
    asserted wall-clock cycles are always nonzero; false on fast hardware)
    that plain debug-mode `cargo test` — what CI runs — never caught. See
    EXPERIMENTS.md "First multi-layer forward benchmark."
+9. ~~Whether learned weights beat the fixed edge-interaction formula~~
+   **ANSWERED 2026-07-27, partial win** — `cargo run --release --bin
+   edge_relatedness_bench` / `ntg::edge_calib`: a trained ternary
+   perceptron on real-edge-vs-random-pair labels beats chance by +0.073
+   test balanced accuracy and beats the fixed formula, but only reaches
+   0.573 (0.635 train) — real signal, not yet a working relatedness
+   detector. See EXPERIMENTS.md "Does learning the edge-relatedness
+   weights beat the fixed formula?" The Phase 2 row above is marked
+   partial, not done, on purpose.
 
 ### P1 — Engineering hardening (still open)
 1. Wire OpStats + device name into ledger entries on forward.
