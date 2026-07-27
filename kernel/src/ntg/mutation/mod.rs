@@ -28,6 +28,7 @@ pub mod study_design;
 pub mod peer_review;
 pub mod publication_pipeline;
 pub mod safety_governance;
+pub mod domain_coordination;
 
 pub use multi_axis::{
     MultiAxisFitness, MultiAxisEvaluator, SelectionOutcome as MultiAxisSelectionOutcome,
@@ -72,6 +73,11 @@ pub use publication_pipeline::{
 pub use safety_governance::{
     SafetyGovernanceEngine, SafetyConstraints, SafetyDecision, SafetyScore,
     BehavioralSnapshot, RollbackCheckpoint, AuditEntry,
+};
+pub use domain_coordination::{
+    DomainCoordinationEngine, AgentId, AgentLevel, PatternAffinity, MutationProposal,
+    ConsensusDecision, QueuedMutation, PatternTransfer, DomainSnapshot, CoordinationConfig,
+    AgentMetadata,
 };
 
 use super::error::NtgError;
