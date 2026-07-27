@@ -872,3 +872,47 @@ testing — all marked for Rung 2 / Phase 6+ integration work.
 Test results: `cargo test --release` still passes all 313 tests (no new
 mutation test failures). `phase3_evolution --release` binary builds clean,
 runs to completion, produces auditable ledger output. `cargo clippy --all-targets --release -- -D warnings`: clean.
+
+## 2026-07-27: Should the kernel ledger use ChronosLedger's mmap file format?
+
+**Why this check happened:** Phase 3 listed three non-goals, of which #3 (live fitness
+critics) was just completed. Non-goal #1 (ChronosLedger mmap parity) remained open.
+Before committing to further work, the question was: is format parity actually needed,
+or was it a false requirement based on ADR 0002's incorrect claim?
+
+**Method:** read GH05T3's actual ChronosLedger implementation
+(`backend/oss/core/chronos_ledger.py`) and compare its design to our StateSlotStore
++ TamperEvidentLedger stack.
+
+**What ChronosLedger actually is:** 32-byte **mutable** agent-state store (7 × float16
+desires + fitness + maturity + parent_offset + generation + heartbeat + uint64 scratchpad).
+Mutations are in-place via struct.pack_into at specific byte offsets. Fitness == 0.0
+marks vacant slots; slots are reused when agents are pruned. Zero cryptography; it is
+a real-time **mutable state store**, not an audit trail.
+
+**What our kernel ledger actually is:** immutable audit trail for topology mutations
+(TamperEvidentLedger = SHA-256 hash-chained signed entries; StateSlotStore = append-only
+48-byte lineage slots for replay). Real-time in-place mutation (ChronosLedger's design)
+is fundamentally incompatible with audit integrity (ledger's requirement).
+
+**Architectural decision: DO NOT implement format parity.**
+
+Reasons:
+1. Different purposes: ChronosLedger is BME agent state (mutable), our ledger is kernel
+   audit trail (immutable). They are complementary, not interchangeable.
+2. Payload mismatch: ChronosLedger encodes BME-specific traits (7 desires, universe ID,
+   role tier) irrelevant to topology mutations.
+3. Integrity requirement: Audit ledgers must be immutable. ChronosLedger's in-place writes
+   destroy that guarantee. Our append-only design is correct.
+4. Clean separation of concerns: StateSlotStore (fast lineage) + TamperEvidentLedger (audit
+   integrity) is architecturally superior to trying to dual-purpose a mutable-state format.
+5. Format simplicity: Our 48-byte slots are endian-clean, don't carry BME baggage, and
+   are trivial to mmap-back if needed later (Phase 3.1+ work, not Phase 3 blocker).
+
+**Conclusion:** Phase 3 non-goal #1 is a design decision, not a gap. No format parity
+needed. StateSlotStore (currently in-memory) can mmap its own 48-byte format when Phase
+3.1 runs. This validates the 2026-07-08 finding that ADR 0002's "reuse ChronosLedger"
+claim was based on a false premise: ChronosLedger was never audit-trail-capable.
+
+Record this as non-goal #1 ARCHITECTURALLY RESOLVED (design decision to not implement parity).
+Remaining Phase 3.1+ work: mmap StateSlotStore, compaction logic — separate from Phase 3 scope.

@@ -156,9 +156,10 @@ do not start N+1 until N is certified.
 | SHA-256 chain + signed entries | ✅ |
 | StateSlot lineage (1-based parent pointers) | ✅ |
 
-**Not claimed:** production mmap ChronosLedger file format parity, multi-agent orchestration.
+**Not claimed:** multi-agent orchestration (requires design clarification).
 
 **Phase 3 non-goal work (2026-07-27):**
+- Non-goal #1 (ChronosLedger mmap parity): ✅ **ARCHITECTURALLY RESOLVED** — Research found ChronosLedger is mutable agent-state store (no cryptography), not audit trail. Parity not needed; our StateSlotStore + TamperEvidentLedger design correctly separates concerns (fast lineage vs. immutable audit). mmap backing deferred to Phase 3.1+. See [EXPERIMENTS.md](EXPERIMENTS.md) 2026-07-27 entry.
 - Non-goal #3 (live fitness critics at scale): ✅ **DONE** — `phase3_evolution` binary runs 15 multi-cycle mutations on real 583-node graph, measures fitness improvement (23.3% efficiency gain), logs all mutations to ledger, implements reflexive critic early-stop heuristic. Proven functional end-to-end with honest +11.1% mutation acceptance rate. See [EXPERIMENTS.md](EXPERIMENTS.md) 2026-07-27 entry.
 
 ### Phase 4 — **COMPLETE** (2026-07-09)
