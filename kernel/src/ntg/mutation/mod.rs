@@ -27,6 +27,7 @@ pub mod research_paper;
 pub mod study_design;
 pub mod peer_review;
 pub mod publication_pipeline;
+pub mod safety_governance;
 
 pub use multi_axis::{
     MultiAxisFitness, MultiAxisEvaluator, SelectionOutcome as MultiAxisSelectionOutcome,
@@ -67,6 +68,10 @@ pub use peer_review::{
 };
 pub use publication_pipeline::{
     PublicationPipeline, Manuscript, PublicationVenue, ManuscriptStatus,
+};
+pub use safety_governance::{
+    SafetyGovernanceEngine, SafetyConstraints, SafetyDecision, SafetyScore,
+    BehavioralSnapshot, RollbackCheckpoint, AuditEntry,
 };
 
 use super::error::NtgError;

@@ -15,6 +15,7 @@ use super::{
     InterdomainAffinityGraph, PatternExtractor, StrategyDiscoveryEngine, TemporalLearningEngine,
     CausalityInferenceEngine, PortfolioLearningEngine, KnowledgeDistillationEngine,
     ResearchPaperEngine, StudyDesignEngine, PeerReviewEngine, PublicationPipeline,
+    SafetyGovernanceEngine, SafetyConstraints,
 };
 
 /// Outcome of a self-improvement cycle.
@@ -92,6 +93,8 @@ pub struct LoopController {
     pub peer_review_engine: PeerReviewEngine,
     /// Publication pipeline: end-to-end manuscript submission workflow.
     pub publication_pipeline: PublicationPipeline,
+    /// Safety governance: mutation gating, drift detection, rollback (Phase 6.12)
+    pub safety_engine: SafetyGovernanceEngine,
 }
 
 impl LoopController {
@@ -114,6 +117,7 @@ impl LoopController {
             study_design_engine: StudyDesignEngine::new(),
             peer_review_engine: PeerReviewEngine::new(),
             publication_pipeline: PublicationPipeline::new(),
+            safety_engine: SafetyGovernanceEngine::new(SafetyConstraints::default()),
         }
     }
 
@@ -192,7 +196,37 @@ impl LoopController {
             ).min(1.0) * 0.2;
 
             // Step 5: Decide acceptance.
-            let was_accepted = cycle.should_accept(new_fitness) && new_efficiency > best_efficiency;
+            let fitness_gate = cycle.should_accept(new_fitness) && new_efficiency > best_efficiency;
+
+            // Phase 6.12: Apply safety governance gate before acceptance
+            let safety_score = self.safety_engine.evaluate_mutation_safety(
+                &proposal.description(),
+                current_efficiency,
+                new_efficiency,
+                0.8, // confidence
+                &format!("{:?}", proposal.kind),
+            );
+
+            let safety_decision = self.safety_engine.gate_mutation_acceptance(
+                &proposal.description(),
+                fitness_gate,
+                &safety_score,
+                current_efficiency,
+                new_efficiency,
+            );
+
+            let was_accepted = matches!(safety_decision, super::SafetyDecision::Approved);
+
+            // Audit the decision
+            self.safety_engine.audit_mutation_decision(
+                proposal.description(),
+                safety_decision.clone(),
+                safety_score.overall_score,
+                current_efficiency,
+                new_efficiency,
+                vec![],
+            );
+
             if was_accepted {
                 // Accept this mutation.
                 cycle.accept_mutation(idx)?;
@@ -293,6 +327,21 @@ impl LoopController {
 
         // Step 8: Advance ledger to next cycle
         self.ledger.next_cycle();
+
+        // Phase 6.12: Record behavioral snapshot for safety governance drift detection
+        let acceptance_rate = if stats.mutations_evaluated > 0 {
+            stats.mutations_accepted as f64 / stats.mutations_evaluated as f64
+        } else {
+            0.0
+        };
+        self.safety_engine.record_behavioral_snapshot(
+            stats.final_efficiency,
+            acceptance_rate,
+            stats.mutations_accepted,
+            stats.mutations_evaluated,
+            format!("{:?}", self.domain),
+        );
+        self.safety_engine.next_cycle();
 
         // Step 9: Sync discovery engine with latest affinity graph for next cycle
         self.discovery_engine.sync_affinity_graph(self.affinity_graph.clone());
@@ -402,6 +451,11 @@ impl LoopController {
         report.push_str("\n--- Publication Pipeline ---\n");
         report.push_str(&self.publication_pipeline_report());
         report
+    }
+
+    /// Get safety governance report (Phase 6.12)
+    pub fn safety_governance_report(&self) -> String {
+        self.safety_engine.report()
     }
 }
 
