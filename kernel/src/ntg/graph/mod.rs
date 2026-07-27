@@ -11,8 +11,10 @@
 //! ternary weights), separate from the structural [`Node`] below.
 
 pub mod node;
+pub mod hypervector;
 
 pub use node::GraphNode;
+pub use hypervector::HyperVector;
 
 use std::cmp::Reverse;
 use std::collections::hash_map::DefaultHasher;
