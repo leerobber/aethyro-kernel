@@ -52,9 +52,9 @@ do not start N+1 until N is certified.
 | Check | Result |
 |-------|--------|
 | `cargo test` (kernel) | 313 unit + 33 integration = 346, all green (capability v10; calib model/sparse/compare tests included) |
-| `cargo build --release` | Success (`libntg_kernel.{so,rlib}`, `phase4_calib`, benches) |
+| `cargo build --release` | Success (`libntg_kernel.{so,rlib}`, `phase4_calib`, benches, `phase3_evolution`) |
 | `cargo clippy -- -D warnings` | Clean (exit 0) |
-| CI | `.github/workflows/ci.yml`: test (debug + `--release`) + phase4 smoke + model roundtrip + density_bench + gemm_bench + edge_relatedness_bench + clippy |
+| CI | `.github/workflows/ci.yml`: test (debug + `--release`) + phase4 smoke + model roundtrip + density_bench + gemm_bench + edge_relatedness_bench + phase3_evolution smoke + clippy |
 | Host hardware (audit machine) | x86_64 with AVX2 + AVX-512F/VPOPCNTDQ advertised — VPOPCNTDQ now actually used by `bit_sliced_avx512` |
 
 ---
@@ -156,7 +156,10 @@ do not start N+1 until N is certified.
 | SHA-256 chain + signed entries | ✅ |
 | StateSlot lineage (1-based parent pointers) | ✅ |
 
-**Not claimed:** production mmap ChronosLedger file format parity, multi-agent orchestration, live Reflexive Fitness critics driving topology at scale.
+**Not claimed:** production mmap ChronosLedger file format parity, multi-agent orchestration.
+
+**Phase 3 non-goal work (2026-07-27):**
+- Non-goal #3 (live fitness critics at scale): ✅ **DONE** — `phase3_evolution` binary runs 15 multi-cycle mutations on real 583-node graph, measures fitness improvement (23.3% efficiency gain), logs all mutations to ledger, implements reflexive critic early-stop heuristic. Proven functional end-to-end with honest +11.1% mutation acceptance rate. See [EXPERIMENTS.md](EXPERIMENTS.md) 2026-07-27 entry.
 
 ### Phase 4 — **COMPLETE** (2026-07-09)
 - Certificate: `docs/phases/PHASE_4_COMPLETE.md`

@@ -105,3 +105,7 @@ path = "src/bin/sovereign_brain_demo.rs"
 [[bin]]
 name = "sovereign_campaign"
 path = "src/bin/sovereign_campaign.rs"
+
+[[bin]]
+name = "phase3_evolution"
+path = "src/bin/phase3_evolution.rs"
