@@ -73,10 +73,12 @@ struct Row {
     density: f32,
     scalar_us: f64,
     bit_sliced_us: f64,
+    bit_sliced_avx512_us: f64,
     sparse_us: f64,
     sparse_blocks: usize,
     scalar_sum: i64,
     bit_sum: i64,
+    avx512_sum: i64,
     sparse_sum: i64,
 }
 
@@ -106,6 +108,11 @@ fn run_density(density: f32) -> Row {
         WARMUP,
         ITERS,
     );
+    let (avx512_ns, avx512_sum) = time_ns(
+        || BitSlicedTernary::dot_product_auto(&a_bs, &b_bs),
+        WARMUP,
+        ITERS,
+    );
     let (sparse_ns, sparse_sum) = time_ns(
         || SparseBitSlicedTernary::dot_product_sparse(&a_sp, &b_sp),
         WARMUP,
@@ -116,35 +123,56 @@ fn run_density(density: f32) -> Row {
         density,
         scalar_us: scalar_ns / 1000.0,
         bit_sliced_us: bit_ns / 1000.0,
+        bit_sliced_avx512_us: avx512_ns / 1000.0,
         sparse_us: sparse_ns / 1000.0,
         sparse_blocks: a_sp.blocks.len().max(b_sp.blocks.len()),
         scalar_sum,
         bit_sum,
+        avx512_sum,
         sparse_sum,
+    }
+}
+
+fn avx512_available() -> bool {
+    #[cfg(target_arch = "x86_64")]
+    {
+        is_x86_feature_detected!("avx512f") && is_x86_feature_detected!("avx512vpopcntdq")
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        false
     }
 }
 
 fn main() {
     println!("# density_bench");
-    println!("n={N} warmup={WARMUP} iters={ITERS} (median wall-clock)");
+    println!(
+        "n={N} warmup={WARMUP} iters={ITERS} (median wall-clock), avx512_vpopcntdq={}",
+        avx512_available()
+    );
     println!();
-    println!("| density | scalar µs | bit-sliced µs | sparse µs | speedup BS/S | speedup SP/S | blocks | sums match |");
-    println!("|--------:|----------:|--------------:|----------:|-------------:|-------------:|-------:|:----------:|");
+    println!("| density | scalar µs | bit-sliced µs | avx512 µs | sparse µs | speedup BS/S | speedup AVX512/BS | speedup SP/S | blocks | sums match |");
+    println!("|--------:|----------:|--------------:|----------:|----------:|-------------:|------------------:|-------------:|-------:|:----------:|");
 
     let densities = [0.01f32, 0.10, 0.50];
     let mut rows = Vec::new();
     for &d in &densities {
         let row = run_density(d);
-        let match_ok = row.scalar_sum == row.bit_sum && row.scalar_sum == row.sparse_sum;
+        let match_ok = row.scalar_sum == row.bit_sum
+            && row.scalar_sum == row.avx512_sum
+            && row.scalar_sum == row.sparse_sum;
         let sp_bs = row.scalar_us / row.bit_sliced_us.max(1e-9);
+        let sp_avx = row.bit_sliced_us / row.bit_sliced_avx512_us.max(1e-9);
         let sp_sp = row.scalar_us / row.sparse_us.max(1e-9);
         println!(
-            "| {:.0}% | {:.2} | {:.2} | {:.2} | {:.2}× | {:.2}× | {} | {} |",
+            "| {:.0}% | {:.2} | {:.2} | {:.2} | {:.2} | {:.2}× | {:.2}× | {:.2}× | {} | {} |",
             d * 100.0,
             row.scalar_us,
             row.bit_sliced_us,
+            row.bit_sliced_avx512_us,
             row.sparse_us,
             sp_bs,
+            sp_avx,
             sp_sp,
             row.sparse_blocks,
             if match_ok { "yes" } else { "NO" }
@@ -160,11 +188,12 @@ fn main() {
             print!(",");
         }
         print!(
-            r#"{{"density":{},"n":{},"scalar_us":{:.4},"bit_sliced_us":{:.4},"sparse_us":{:.4},"sparse_blocks":{},"sums_match":{}}}"#,
+            r#"{{"density":{},"n":{},"scalar_us":{:.4},"bit_sliced_us":{:.4},"bit_sliced_avx512_us":{:.4},"sparse_us":{:.4},"sparse_blocks":{},"sums_match":{}}}"#,
             r.density,
             N,
             r.scalar_us,
             r.bit_sliced_us,
+            r.bit_sliced_avx512_us,
             r.sparse_us,
             r.sparse_blocks,
             ok

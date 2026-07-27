@@ -13,7 +13,7 @@ before starting the next phase. No exceptions, no "we'll fix the tests
 later." A phase that isn't green isn't done, regardless of how much code
 exists for it.
 
-**Test baseline (2026-07-26):** 338 automated tests green (305 unit + 33
+**Test baseline (2026-07-27):** 341 automated tests green (308 unit + 33
 integration, `cargo test` in `kernel/`). `cargo clippy -- -D warnings`
 clean. Capability report version **10** (Phase 5 optimization complete).
 
@@ -62,8 +62,12 @@ See **[PHASE_GATE_PROTOCOL.md](PHASE_GATE_PROTOCOL.md)**.
 - [x] `GraphNode` weighted nodes (`graph/node.rs`)
 - [x] `tools/ingest.py` sequential layer node-ID contract
 - [x] Micro-bench vs scalar i8 dots; recorded in EXPERIMENTS.md
-- [x] AVX-512 multi-block **re-scoped to Phase 5** (ADR/PHASE_1_COMPLETE:
-      detect exists; portable popcount is production path)
+- [x] AVX-512 multi-block: re-scoped past Phase 5 at the time (detect
+      existed; portable popcount was the production path) — **implemented
+      2026-07-27**: `ntg::storage::bit_sliced_avx512::dot_product_avx512`,
+      real `_mm512_popcnt_epi64`, wired into the runtime dispatch path.
+      5.9-7.1× over portable bit-sliced, 43-52× over scalar (measured,
+      see EXPERIMENTS.md).
 - [x] NEON path **documented complete for Phase 1**: bit-identical
       aarch64 chunk path + scalar fallback; full `vmull` → Phase 5
 - [x] Canonical storage: [ADR 0005](architecture/0005-canonical-ternary-storage.md)

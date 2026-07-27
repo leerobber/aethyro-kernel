@@ -215,7 +215,8 @@ pub fn matmul_fast(a: &[i8], b: &[i8], m: usize, k: usize, n: usize) -> Result<V
     matmul_scalar(a, b, m, k, n)
 }
 
-/// Bit-sliced dense dot product (64-wide popcount). Shape-guarded.
+/// Bit-sliced dense dot product (64-wide popcount, AVX-512 VPOPCNTDQ
+/// 512-wide when the host has it). Shape-guarded.
 pub fn bit_sliced_dot_fast(a: &BitSlicedTernary, b: &BitSlicedTernary) -> Result<i64, NtgError> {
     if a.len() != b.len() {
         return Err(NtgError::ShapeMismatch {
@@ -223,7 +224,7 @@ pub fn bit_sliced_dot_fast(a: &BitSlicedTernary, b: &BitSlicedTernary) -> Result
             got: b.len(),
         });
     }
-    Ok(BitSlicedTernary::dot_product_parallel(a, b))
+    Ok(BitSlicedTernary::dot_product_auto(a, b))
 }
 
 // ---------------------------------------------------------------------------

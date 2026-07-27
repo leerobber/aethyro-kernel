@@ -31,10 +31,11 @@ xargs grep` over this paragraph.
 proof matrix, gaps, and next priorities.  
 → **[docs/ROADMAP.md](docs/ROADMAP.md)** — phased gates.
 
-**As of 2026-07-26:** pre-alpha research kernel, **capability v10**,
-Phase 0–5 COMPLETE (calib + precision + GraphNode warm-start path), 338
-tests green, clippy clean. Not benchmarked against production
-aethyro.com inference; no GTM decision.
+**As of 2026-07-27:** pre-alpha research kernel, **capability v10**,
+Phase 0–5 COMPLETE (calib + precision + GraphNode warm-start path), 341
+tests green, clippy clean, real AVX-512 VPOPCNTDQ kernel (5.9-7.1× over
+portable bit-sliced, measured not assumed). Not benchmarked against
+production aethyro.com inference; no GTM decision.
 
 ## What's actually new (precise claim)
 
@@ -105,8 +106,9 @@ echo '{"layers":[{"nodes":[{"id":0},{"id":1}]}]}' | python3 tools/ingest.py
 
 ## Explicitly not done
 
-- Full AVX-512 VPOPCNTDQ kernels (detect yes, full kernels no)  
-- GPU/NPU (re-scoped: CPU TOBL 12–20×; revisit at large tensors)  
+- Full NEON kernels (ARM64 falls back to scalar; no ARM CI runner to verify bit-identity)
+- End-to-end / GEMM-scale benchmark (only dot-product micro-benchmarks exist)
+- GPU/NPU (re-scoped: CPU TOBL now 43-52× over scalar with AVX-512; revisit at large tensors)  
 - Phase 6 integration / product head-to-head vs aethyro.com  
 - Self-mod enabled by default (stays off)
 - Lazy PIXEL-lite glyph fingerprints (ADR 0003 design only)

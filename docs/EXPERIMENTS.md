@@ -558,3 +558,48 @@ Test count dropped 401 → 338 (the difference is exactly the deleted
 modules' own unit tests, not a coverage loss on kept code). `cargo build
 --lib --bins --tests --benches` and `cargo clippy --all-targets` both zero
 warnings after the cut, not just zero errors.
+
+## 2026-07-26/27 — Real AVX-512 VPOPCNTDQ kernel (Phase 1 gap closed)
+
+STATUS.md's P1 list had carried "real AVX-512 VPOPCNTDQ kernels for dense
+dual-stream words" as open since at least 2026-07-09: `resolve_avx512_hardware()`
+correctly detected `avx512f`+`avx512vpopcntdq` and labeled the device
+`Avx512Cpu`, but `runtime::bit_sliced_dot_fast` always called
+`BitSlicedTernary::dot_product_parallel` regardless -- one `u64` word
+(64 elements) per `count_ones()` call, on every host, detected hardware or not.
+
+Added `ntg::storage::bit_sliced_avx512::dot_product_avx512`: processes 8
+words (512 elements) per instruction via `_mm512_popcnt_epi64`, same
+four-popcount formula as the portable path
+(`(pos&pos)+(neg&neg)-(pos&neg)-(neg&pos)`), with a scalar tail for any
+remainder under 8 words. `BitSlicedTernary::dot_product_auto` runtime-detects
+the feature pair and dispatches to it, falling back to the portable path
+otherwise; `bit_sliced_dot_fast` now calls `dot_product_auto` instead of
+`dot_product_parallel` directly, so detected hardware is actually used, not
+just reported.
+
+**Correctness proof (not just claimed):** 5 new tests compare the AVX-512
+kernel against the portable reference bit-for-bit across sizes chosen to
+cross the 8-word/512-element SIMD boundary in every direction (0, 1, 63,
+64, 65, 127, 128, 511, 512, 513, 1000, 4096, 4099 elements; all-positive,
+all-negative, all-zero, and pseudorandom ternary patterns) -- all pass on
+real `avx512f`+`avx512vpopcntdq` hardware, not emulated.
+
+**Measured speedup** (`density_bench`, n=262144, median of 200 iters,
+release + LTO build, same host as the profile-pass numbers above):
+
+| density | scalar µs | bit-sliced (portable) µs | bit-sliced (AVX-512) µs | speedup vs portable bit-sliced | speedup vs scalar |
+|--------:|----------:|-------------------------:|-------------------------:|--------------------------------:|--------------------:|
+| 1% | 95.70 | 13.22 | 1.86 | 7.13× | 51.6× |
+| 10% | 95.35 | 13.22 | 2.23 | 5.93× | 42.8× |
+| 50% | 88.31 | 13.21 | 1.86 | 7.11× | 47.5× |
+
+`sums_match: true` on every row (the bench itself cross-checks scalar,
+bit-sliced, AVX-512, and sparse sums and fails the process on divergence).
+On a host without `avx512vpopcntdq`, `dot_product_auto` transparently falls
+back to the portable path -- `density_bench` prints `avx512_vpopcntdq=false`
+and the AVX-512 column equals the bit-sliced column exactly (same code
+path), so this doesn't break CI on runners without the feature.
+
+`cargo test`: 341 passed (338 + 3 new). `cargo clippy -- -D warnings` and
+`cargo clippy --all-targets -- -D warnings`: both clean.

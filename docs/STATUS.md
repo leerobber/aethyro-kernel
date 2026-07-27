@@ -1,6 +1,6 @@
 # Aethyro NTG Engine — Project Status Report
 
-**As of:** 2026-07-26  
+**As of:** 2026-07-27  
 **Capability version:** 10 (`ternary_capability()` — Phase 5 runtime calib supported)  
 **Build:** `cargo test` + `cargo build --release` + `cargo clippy -- -D warnings` all green on host  
 **Authority:** This document is the single source of truth for “where the project is.” The
@@ -27,7 +27,7 @@ real, narrow scope. See git history for anything that needs recovering.
 |-----------|------------|
 | **Maturity** | Pre-alpha **research kernel** — substantial foundations, not a product |
 | **Correctness posture** | Strong: Result-based APIs, bit-identity tests, ledger tamper tests, ADR rails tested |
-| **Performance posture** | Improving: density micro-bench recorded (bit-sliced ~12× vs i8 scalar; sparse conditional). Still no end-to-end vs aethyro.com; AVX-512 full kernels open |
+| **Performance posture** | Improving: real AVX-512 VPOPCNTDQ kernel now live (5.9-7.1× over portable bit-sliced, 43-52× over scalar, measured 2026-07-27) on top of the earlier bit-sliced ~12× vs i8 scalar. Still no end-to-end vs aethyro.com; NEON is still a fallback stub |
 | **Safety posture** | Phase 3 rails implemented and tested; self-mod **off by default** |
 | **Product readiness** | **Not ready** — no production-benchmark win/loss vs aethyro.com inference |
 | **Primary risk** | Docs and marketing language outrunning measurements; dual storage stacks need a clear “canonical path” story |
@@ -51,11 +51,11 @@ do not start N+1 until N is certified.
 
 | Check | Result |
 |-------|--------|
-| `cargo test` (kernel) | 305 unit + 33 integration = 338, all green (capability v10; calib model/sparse/compare tests included) |
+| `cargo test` (kernel) | 308 unit + 33 integration = 341, all green (capability v10; calib model/sparse/compare tests included) |
 | `cargo build --release` | Success (`libntg_kernel.{so,rlib}`, `phase4_calib`, benches) |
 | `cargo clippy -- -D warnings` | Clean (exit 0) |
 | CI | `.github/workflows/ci.yml`: test + phase4 smoke + model roundtrip + density_bench + clippy |
-| Host hardware (audit machine) | x86_64 with AVX2 + AVX-512F/VPOPCNTDQ advertised |
+| Host hardware (audit machine) | x86_64 with AVX2 + AVX-512F/VPOPCNTDQ advertised — VPOPCNTDQ now actually used by `bit_sliced_avx512` |
 
 ---
 
@@ -129,7 +129,7 @@ do not start N+1 until N is certified.
 | Native runtime + accel selection | ✅ |
 | Recorded micro-bench deltas vs scalar (dots) | ✅ EXPERIMENTS.md 2026-07-09 |
 | End-to-end / GEMM / production deltas | ❌ **open** |
-| True AVX-512 multi-block popcnt kernels | ❌ detect only / portable `count_ones` |
+| True AVX-512 multi-block popcnt kernels | ✅ **DONE 2026-07-27** — `bit_sliced_avx512::dot_product_avx512`, real `_mm512_popcnt_epi64`, wired into `dot_product_auto`/`bit_sliced_dot_fast` |
 | NEON full path | ⚠️ stub / fallback |
 
 ### Phase 2 — Graph + SIS — **STRUCTURALLY DONE; GAPS REMAIN**
@@ -178,13 +178,13 @@ decision remain later — see [ROADMAP.md](ROADMAP.md) Phase 6.
 
 | Suite | Count | What it proves |
 |-------|------:|----------------|
-| Unit (`--lib`) | 305 | Core algorithms, ledger, mutation (incl. Rung 2 multi-axis), storage, runtime, graph, accel, `genomic/` sovereign-brain chain |
+| Unit (`--lib`) | 308 | Core algorithms, ledger, mutation (incl. Rung 2 multi-axis), storage (incl. AVX-512 vs. portable bit-identity), runtime, graph, accel, `genomic/` sovereign-brain chain |
 | `phase1_2_3_simd_ffi` | 11 | SIMD parity, FFI, OpStats |
 | `phase1_2_3_storage_integration` | 10 | PackedTernary + TOBL + ledger glue |
 | `phase3_integration` | 7 | All five ADR 0002 rails end-to-end |
 | `self_parse` | 3 | Real repo docs parse without panic |
 | `sovereign_integration` | 2 | LTM motif activation, train/prune acceptance bias |
-| **Total** | **338** | |
+| **Total** | **341** | |
 
 ### Known test honesty notes
 - Sparse `ternary_matmul` is **chunk-level score → ±1 gate**, not full dense GEMM.
@@ -228,10 +228,23 @@ stubs were deleted 2026-07-26 — they carried no content beyond "see STATUS.md.
 5. ~~Repo scope matched its README claim~~ **DONE 2026-07-26** — pre-pivot
    genomics bloat (9 modules, `vitascale/`, 10 demo binaries) removed;
    `genomic/` is now honestly scoped to the Rung 2 sovereign-brain chain.
+6. ~~Real AVX-512 VPOPCNTDQ kernels~~ **DONE 2026-07-27** —
+   `ntg::storage::bit_sliced_avx512::dot_product_avx512` (8 words/512
+   elements per `_mm512_popcnt_epi64`), wired into `runtime::bit_sliced_dot_fast`
+   via `BitSlicedTernary::dot_product_auto` so detected hardware is actually
+   used, not just reported. 5 new tests prove bit-identity against the
+   portable reference across the SIMD-boundary sizes. Measured: 5.9-7.1×
+   over the already-fast portable bit-sliced path, 43-52× over scalar — see
+   EXPERIMENTS.md "Real AVX-512 VPOPCNTDQ kernel."
 
 ### P1 — Engineering hardening (still open)
-1. Real AVX-512 VPOPCNTDQ kernels for dense dual-stream words (host already has features).
-2. Wire OpStats + device name into ledger entries on forward.
+1. Wire OpStats + device name into ledger entries on forward.
+2. NEON is still a scalar-fallback stub (`matmul_neon_inner`'s comment
+   says what real `vmull_s8`/`vaddw_s32` NEON would do, doesn't do it) —
+   no ARM CI runner exists to verify bit-identity if implemented.
+3. No end-to-end/GEMM-scale benchmark — `density_bench` and the new
+   AVX-512 numbers are dot-product micro-benchmarks; nothing exercises a
+   full model-scale matmul yet.
 
 ### P2 — Phase 6 entry (Phases 0–5 all certified; see §1)
 1. Freeze a model artifact (`phase4_calib --write-model`), load it in an
