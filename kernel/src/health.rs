@@ -164,6 +164,36 @@ impl HealthMonitor {
     pub fn recent_metrics_snapshot(&self) -> Vec<PerformanceSnapshot> {
         self.recent_metrics.iter().cloned().collect()
     }
+
+    /// Get baseline latency (microseconds)
+    pub fn baseline_latency_us(&self) -> u64 {
+        self.baseline_latency
+    }
+
+    /// Get baseline memory (bytes)
+    pub fn baseline_memory_bytes(&self) -> usize {
+        self.baseline_memory
+    }
+
+    /// Get current average latency (microseconds)
+    pub fn current_latency_us(&self) -> u64 {
+        if self.recent_metrics.is_empty() {
+            self.baseline_latency
+        } else {
+            self.recent_metrics.iter().map(|s| s.latency_us).sum::<u64>()
+                / self.recent_metrics.len() as u64
+        }
+    }
+
+    /// Get current average memory (bytes)
+    pub fn current_memory_bytes(&self) -> usize {
+        if self.recent_metrics.is_empty() {
+            self.baseline_memory
+        } else {
+            self.recent_metrics.iter().map(|s| s.memory_bytes).sum::<usize>()
+                / self.recent_metrics.len()
+        }
+    }
 }
 
 #[cfg(test)]

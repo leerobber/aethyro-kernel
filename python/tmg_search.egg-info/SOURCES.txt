@@ -1,0 +1,15 @@
+README.md
+setup.py
+benchmarks/__init__.py
+benchmarks/similarity_benchmark.py
+tests/__init__.py
+tests/test_hypervector.py
+tests/test_kernels.py
+tmg_search/__init__.py
+tmg_search/hypervector.py
+tmg_search/kernels.py
+tmg_search.egg-info/PKG-INFO
+tmg_search.egg-info/SOURCES.txt
+tmg_search.egg-info/dependency_links.txt
+tmg_search.egg-info/requires.txt
+tmg_search.egg-info/top_level.txt

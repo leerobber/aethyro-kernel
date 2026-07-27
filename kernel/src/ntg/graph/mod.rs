@@ -240,6 +240,20 @@ impl Graph {
         self.edges.len()
     }
 
+    /// Get all edges as a slice.
+    pub fn edges(&self) -> &[(NodeId, NodeId)] {
+        &self.edges
+    }
+
+    /// Get all nodes (with indices), including None slots for removed nodes.
+    pub fn nodes(&self) -> Vec<(NodeId, Option<&Node>)> {
+        self.nodes
+            .iter()
+            .enumerate()
+            .map(|(id, node)| (id, node.as_ref()))
+            .collect()
+    }
+
     /// Children of `id`, in edge-insertion order -- deterministic by
     /// construction. O(degree) via adjacency list.
     pub fn children(&self, id: NodeId) -> Vec<NodeId> {
