@@ -27,7 +27,7 @@ real, narrow scope. See git history for anything that needs recovering.
 |-----------|------------|
 | **Maturity** | Pre-alpha **research kernel** — substantial foundations, not a product |
 | **Correctness posture** | Strong: Result-based APIs, bit-identity tests, ledger tamper tests, ADR rails tested |
-| **Performance posture** | Improving: real AVX-512 VPOPCNTDQ kernel now live (5.9-7.1× over portable bit-sliced, 43-52× over scalar, measured 2026-07-27) on top of the earlier bit-sliced ~12× vs i8 scalar. Still no end-to-end vs aethyro.com; NEON is still a fallback stub |
+| **Performance posture** | Improving: real AVX-512 VPOPCNTDQ kernel now live (5.9-7.1× over portable bit-sliced, 43-52× over scalar, measured 2026-07-27) on top of the earlier bit-sliced ~12× vs i8 scalar. Real NEON kernels also now implemented (both `matmul_neon_inner` and TOBL's `tobl_dot_neon`), verified via QEMU aarch64 emulation (no real ARM CI/hardware yet). Still no end-to-end vs aethyro.com |
 | **Safety posture** | Phase 3 rails implemented and tested; self-mod **off by default** |
 | **Product readiness** | **Not ready** — no production-benchmark win/loss vs aethyro.com inference |
 | **Primary risk** | Docs and marketing language outrunning measurements; dual storage stacks need a clear “canonical path” story |
@@ -99,8 +99,9 @@ do not start N+1 until N is certified.
 | `ntg/storage/packed_ternary.rs` | Cache-aligned 2-bit/u64 packing + density/generation | Solid |
 | `ntg/storage/bit_sliced_ternary.rs` | Dual-stream pos/neg, 64-wide popcount dot | Solid |
 | `ntg/storage/sparse_bit_sliced_ternary.rs` | Flat COO sparse, tombstones, matmul/residual, ledger mutations | Solid |
-| `ntg/storage/tobl_kernel.rs` | TOBL dot dispatch (scalar / AVX2 / NEON stub) | Correctness-first; perf unproven |
-| `ntg/simd/*` | Runtime SIMD path selection + AVX2 wrapper | Bit-identity OK; AVX2 matmul is correctness path |
+| `ntg/storage/tobl_kernel.rs` | TOBL dot dispatch (scalar / AVX2 / real NEON) | Bit-identity tested on all three paths |
+| `ntg/storage/bit_sliced_avx512.rs` | Real AVX-512 VPOPCNTDQ dual-stream popcount, 8 words/instruction | Tested bit-identical to portable path; 5.9-7.1× measured |
+| `ntg/simd/*` | Runtime SIMD path selection + AVX2/NEON wrappers | Bit-identity OK; AVX2 matmul is correctness path, NEON verified via QEMU |
 | `ntg/ffi/*` | C ABI matmul + TOBL handles + OpStats | Solid boundary tests |
 | `ntg/graph/*` | Structural graph + `GraphNode` weights | Solid; adj_list added |
 | `ntg/docparse`, `pathparse`, `fsevents`, `leafsignal` | SIS front-end (ADR 0003 partial) | Solid within scope |
@@ -130,7 +131,7 @@ do not start N+1 until N is certified.
 | Recorded micro-bench deltas vs scalar (dots) | ✅ EXPERIMENTS.md 2026-07-09 |
 | End-to-end / GEMM / production deltas | ❌ **open** |
 | True AVX-512 multi-block popcnt kernels | ✅ **DONE 2026-07-27** — `bit_sliced_avx512::dot_product_avx512`, real `_mm512_popcnt_epi64`, wired into `dot_product_auto`/`bit_sliced_dot_fast` |
-| NEON full path | ⚠️ stub / fallback |
+| NEON full path | ✅ **DONE 2026-07-27** — real `vmull_s8`/`vaddlvq_s16` in `matmul_neon_inner` and `tobl_dot_neon`; verified via QEMU aarch64 emulation (no ARM CI/hardware yet, flagged honestly) |
 
 ### Phase 2 — Graph + SIS — **STRUCTURALLY DONE; GAPS REMAIN**
 | Item | Status |
@@ -236,15 +237,29 @@ stubs were deleted 2026-07-26 — they carried no content beyond "see STATUS.md.
    portable reference across the SIMD-boundary sizes. Measured: 5.9-7.1×
    over the already-fast portable bit-sliced path, 43-52× over scalar — see
    EXPERIMENTS.md "Real AVX-512 VPOPCNTDQ kernel."
+7. ~~Real NEON kernels~~ **DONE 2026-07-27** — both `ntg::simd::neon::matmul_neon_inner`
+   (`vmull_s8` + `vaddlvq_s16`) and `ntg::storage::tobl_kernel::tobl_dot_neon`
+   (same unpack-then-multiply approach as the AVX2 path, at NEON's native
+   8-lane width). No ARM CI runner exists, so verified by cross-compiling
+   to `aarch64-unknown-linux-gnu` and running the full test suite under
+   `qemu-aarch64-static` user-mode emulation — genuine instruction-level
+   execution, not real silicon, flagged honestly rather than claimed as
+   hardware-tested. Also found and fixed a pre-existing latent bug in
+   `neon_matches_scalar` (wrong `NtgError` scope) that had silently never
+   compiled before, since nothing had ever actually built this crate's
+   aarch64-gated code until now.
 
 ### P1 — Engineering hardening (still open)
 1. Wire OpStats + device name into ledger entries on forward.
-2. NEON is still a scalar-fallback stub (`matmul_neon_inner`'s comment
-   says what real `vmull_s8`/`vaddw_s32` NEON would do, doesn't do it) —
-   no ARM CI runner exists to verify bit-identity if implemented.
-3. No end-to-end/GEMM-scale benchmark — `density_bench` and the new
-   AVX-512 numbers are dot-product micro-benchmarks; nothing exercises a
-   full model-scale matmul yet.
+2. No end-to-end/GEMM-scale benchmark — `density_bench` and the AVX-512
+   numbers are dot-product micro-benchmarks; nothing exercises a full
+   model-scale matmul yet.
+3. A wall-clock-budget test (`calib::tests::self_mod_probe_enabled_logs_ledger`,
+   5ms budget) was observed to fail intermittently under QEMU aarch64
+   emulation with the full suite running in parallel (never on native
+   x86_64, and not reproducible on repeat aarch64 runs either) — noted,
+   not fixed, since it never touches the real CI environment (native
+   x86_64) and isn't reliably reproducible to debug further right now.
 
 ### P2 — Phase 6 entry (Phases 0–5 all certified; see §1)
 1. Freeze a model artifact (`phase4_calib --write-model`), load it in an

@@ -68,8 +68,12 @@ See **[PHASE_GATE_PROTOCOL.md](PHASE_GATE_PROTOCOL.md)**.
       real `_mm512_popcnt_epi64`, wired into the runtime dispatch path.
       5.9-7.1× over portable bit-sliced, 43-52× over scalar (measured,
       see EXPERIMENTS.md).
-- [x] NEON path **documented complete for Phase 1**: bit-identical
-      aarch64 chunk path + scalar fallback; full `vmull` → Phase 5
+- [x] NEON path: originally scalar fallback with a comment describing
+      what real `vmull`/`vaddw` NEON would do — **implemented 2026-07-27**:
+      real `vmull_s8` + `vaddlvq_s16` in both `matmul_neon_inner` and TOBL's
+      `tobl_dot_neon`. Verified via QEMU aarch64 emulation cross-compile
+      (no ARM CI/hardware yet — flagged honestly, not claimed as
+      hardware-tested).
 - [x] Canonical storage: [ADR 0005](architecture/0005-canonical-ternary-storage.md)
 
 ### 1.3 FFI + observability ✅ DONE

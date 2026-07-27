@@ -98,7 +98,7 @@ echo '{"layers":[{"nodes":[{"id":0},{"id":1}]}]}' | python3 tools/ingest.py
 
 1. **Ternary core** — scalar golden `matmul_scalar`, encoding  
 2. **Storage** — packed 2-bit, dual-stream bit-sliced, sparse COO  
-3. **SIMD / TOBL / FFI** — runtime dispatch, C ABI, OpStats  
+3. **SIMD / TOBL / FFI** — runtime dispatch (real AVX2, AVX-512, and NEON kernels, not just detection), C ABI, OpStats  
 4. **Graph + SIS** — topology, doc/path parse, fs-event pure layer, adj_list  
 5. **Native runtime** — `forward_native_parallel` + density-based `AccelManager`  
 6. **Ledger + self-mod** — SHA-256 chain, budgets, fitness, **off by default**
@@ -106,8 +106,8 @@ echo '{"layers":[{"nodes":[{"id":0},{"id":1}]}]}' | python3 tools/ingest.py
 
 ## Explicitly not done
 
-- Full NEON kernels (ARM64 falls back to scalar; no ARM CI runner to verify bit-identity)
 - End-to-end / GEMM-scale benchmark (only dot-product micro-benchmarks exist)
+- NEON verified only via QEMU aarch64 emulation cross-compile — no real ARM CI/hardware yet
 - GPU/NPU (re-scoped: CPU TOBL now 43-52× over scalar with AVX-512; revisit at large tensors)  
 - Phase 6 integration / product head-to-head vs aethyro.com  
 - Self-mod enabled by default (stays off)

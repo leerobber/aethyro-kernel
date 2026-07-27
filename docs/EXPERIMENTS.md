@@ -603,3 +603,67 @@ path), so this doesn't break CI on runners without the feature.
 
 `cargo test`: 341 passed (338 + 3 new). `cargo clippy -- -D warnings` and
 `cargo clippy --all-targets -- -D warnings`: both clean.
+
+## 2026-07-27 — Real NEON kernels (Phase 1 gap closed)
+
+The other half of Phase 1's SIMD gap: `ntg::simd::neon::matmul_neon_inner`
+had a comment reading "Real NEON would use vmull_s8 and vaddw_s32" instead
+of doing it (scalar loop instead), and `ntg::storage::tobl_kernel::tobl_dot_neon`
+was a bare `// Placeholder` returning the scalar result directly. No ARM CI
+runner exists for this repo, so this had never been exercised at all.
+
+**Set up real ARM64 verification** rather than writing untested intrinsics:
+`rustup target add aarch64-unknown-linux-gnu`, `apt install gcc-aarch64-linux-gnu
+qemu-user-static`, `~/.cargo/config.toml` pointing the target's linker at
+`aarch64-linux-gnu-gcc` and its test/run `runner` at `qemu-aarch64-static`
+(with `QEMU_LD_PREFIX=/usr/aarch64-linux-gnu` for dynamic linking). This
+gives genuine instruction-level NEON execution under emulation -- not real
+silicon, but real `vmull_s8`/`vaddlvq_s16` instructions actually decoded and
+executed, not just compiled. Verified the exact intrinsics against known
+answers (including i8-range overflow-adjacent cases: 127*127 + -128*-128 +
+...) before touching the kernel code.
+
+**Implemented:**
+- `matmul_neon_inner`: 8-lane `vmull_s8` (widening i8×i8→i16, safe for the
+  full i8 range) + `vaddlvq_s16` (widening horizontal reduce to i32, avoids
+  the i16-lane overflow a naive `vaddvq_s16` risks once several chunks
+  accumulate), scalar tail for `k % 8 != 0`.
+- `tobl_dot_neon`: same unpack-packed-ternary-then-multiply approach as the
+  existing AVX2 `tobl_dot_avx2`, at NEON's native 8-lane width (four chunks
+  per 32-element word instead of AVX2's two 16-lane halves).
+
+**Found and fixed in the process:** a pre-existing latent bug in the
+original `neon_matches_scalar` test -- its signature used a bare `NtgError`
+that was never actually in scope (the `use super::*` was inside the
+function body, too late to affect the signature). This had silently never
+compiled, since nothing had ever built this crate's `aarch64`-gated code
+before. Fixed to the same fully-qualified-path pattern the sibling test
+already used correctly.
+
+**Correctness proof:** 6 new tests (4 for `matmul_neon_inner`, 2 for
+`tobl_dot_neon`) comparing against the scalar reference bit-for-bit,
+including sizes chosen to cross the 8-lane/32-element boundaries in every
+direction, full-i8-range values, and non-multiple-of-8 remainders. All run
+and pass under `cargo test --target aarch64-unknown-linux-gnu`
+(QEMU-emulated). Full suite also re-run clean under emulation: 308 lib
+tests passed (one architecture-specific count difference from the x86_64
+run, expected -- different tests are `cfg`-gated per target).
+
+**One flaky test observed under emulation, not fixed:**
+`calib::tests::self_mod_probe_enabled_logs_ledger` (a 5ms wall-clock
+budget check) failed once when running the full suite in parallel under
+QEMU load, but passed reliably on repeat runs both in isolation and as
+part of the full suite, and never failed on native x86_64 across multiple
+runs. Not reproducible enough to root-cause further, and irrelevant to the
+real CI environment (native x86_64, no emulation) -- noted rather than
+chased.
+
+No performance numbers claimed here: QEMU user-mode emulation timing has
+no relationship to real ARM64 hardware performance, so a "speedup" measured
+under emulation would be meaningless. This entry is about correctness
+verification only.
+
+`cargo test` (x86_64, the real CI target): 341 passed, unchanged (all new
+NEON tests are `aarch64`-gated and invisible on x86_64). `cargo clippy
+-- -D warnings` and `cargo clippy --all-targets -- -D warnings`: both
+clean.

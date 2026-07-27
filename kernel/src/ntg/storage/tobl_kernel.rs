@@ -1,11 +1,9 @@
 //! TOBL kernel dispatch: Ternary-Optimized Bitwise Logic dot-product operations.
 //!
 //! Provides runtime-selected SIMD paths for PackedTernary:
-//! - AVX2: 32-element batches with bit-level ternary multiply-accumulate
-//! - NEON: ARM64 fallback (8-element batches)
+//! - AVX2: 32-element batches (two 16-lane i16 unpacks) with bit-level ternary multiply-accumulate
+//! - NEON: 32-element batches (four 8-lane i16 unpacks), same approach at NEON's native width
 //! - Scalar: universal fallback
-//!
-//! Targets 40% cycle reduction vs generic SIMD _mm256_add/_mm_mult paths.
 
 use super::PackedTernary;
 use crate::ntg::error::NtgError;
@@ -188,13 +186,60 @@ unsafe fn horizontal_sum_epi16(v: std::arch::x86_64::__m256i) -> i64 {
     result
 }
 
-/// ARM NEON dot-product stub.
+/// NEON dot-product: process each packed word (32 ternary elements) as
+/// four 8-lane int16x8_t chunks. Same unpack-then-multiply approach as
+/// the AVX2 path above, at NEON's native 8-lane width instead of AVX2's
+/// 16-lane halves. Verified bit-identical to the scalar reference,
+/// cross-compiled to aarch64-unknown-linux-gnu and run under QEMU
+/// user-mode emulation (no ARM CI runner exists yet -- see `tests`).
+///
+/// Note: padding bits beyond `len` are zeros, so full-word MACs are safe.
 #[cfg(target_arch = "aarch64")]
 #[target_feature(enable = "neon")]
 unsafe fn tobl_dot_neon(a: &PackedTernary, b: &PackedTernary) -> i64 {
-    // Placeholder: full NEON implementation deferred to Phase 1.3+
-    // Fallback to scalar for now
-    tobl_dot_scalar(a, b)
+    use std::arch::aarch64::*;
+
+    let mut sum_acc: i64 = 0;
+    let word_count = a.word_count();
+
+    for wi in 0..word_count {
+        let aw = *a.word_ptr().add(wi);
+        let bw = *b.word_ptr().add(wi);
+
+        // 32 elements / word -> four 8-lane i16 vectors
+        for chunk in 0..4 {
+            let a_unpacked = unpack_ternary_chunk_to_i16(aw, chunk);
+            let b_unpacked = unpack_ternary_chunk_to_i16(bw, chunk);
+
+            let products = vmulq_s16(a_unpacked, b_unpacked);
+            sum_acc += vaddlvq_s16(products) as i64;
+        }
+    }
+
+    sum_acc
+}
+
+/// Unpack 8 ternary values from one quarter of a u64 word into i16 lanes.
+/// `chunk` in `0..4` selects elements `chunk*8 .. chunk*8+8`.
+#[cfg(target_arch = "aarch64")]
+#[inline]
+unsafe fn unpack_ternary_chunk_to_i16(word: u64, chunk: usize) -> std::arch::aarch64::int16x8_t {
+    use std::arch::aarch64::*;
+
+    let base = chunk * 8;
+    let mut lanes = [0i16; 8];
+    for (i, lane) in lanes.iter_mut().enumerate() {
+        let bit_offset = (base + i) * 2;
+        let packed = ((word >> bit_offset) & 0b11) as i16;
+        *lane = match packed {
+            0b01 => -1,
+            0b00 => 0,
+            0b10 => 1,
+            _ => 0,
+        };
+    }
+
+    vld1q_s16(lanes.as_ptr())
 }
 
 #[cfg(test)]
@@ -242,5 +287,40 @@ mod tests {
             path,
             ToblKernelPath::Scalar | ToblKernelPath::AVX2 | ToblKernelPath::NEON
         ));
+    }
+
+    /// NEON kernel vs scalar, forced (not relying on `select_kernel_path`),
+    /// across sizes chosen to cross the 8-lane and 32-element/word
+    /// boundaries: less than one chunk, exactly one chunk, one word minus
+    /// one, exactly one word, one word plus remainder, several words.
+    #[test]
+    #[cfg(target_arch = "aarch64")]
+    fn tobl_dot_neon_matches_scalar_across_boundaries() {
+        for &len in &[0usize, 1, 7, 8, 9, 31, 32, 33, 40, 65, 100] {
+            let mut state = 0x1234_5678_9abc_def0u64 ^ len as u64;
+            let mut next_val = || {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                match state % 3 {
+                    0 => -1i8,
+                    1 => 0,
+                    _ => 1,
+                }
+            };
+            let vals_a: Vec<i8> = (0..len).map(|_| next_val()).collect();
+            let vals_b: Vec<i8> = (0..len).map(|_| next_val()).collect();
+
+            let mut a = PackedTernary::new(len);
+            let mut b = PackedTernary::new(len);
+            if len > 0 {
+                a.set_from_slice(&vals_a).unwrap();
+                b.set_from_slice(&vals_b).unwrap();
+            }
+
+            let scalar = tobl_dot_scalar(&a, &b);
+            let neon = unsafe { tobl_dot_neon(&a, &b) };
+            assert_eq!(neon, scalar, "NEON TOBL dot diverged from scalar at len={len}");
+        }
     }
 }
