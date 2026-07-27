@@ -12,7 +12,7 @@ use super::super::graph::Graph;
 use super::super::error::NtgError;
 use super::{
     MutationCycle, SelfModConfig, AdaptiveMutationProposer, DegradationSignal, MutationLedger, Domain,
-    InterdomainAffinityGraph, PatternExtractor,
+    InterdomainAffinityGraph, PatternExtractor, StrategyDiscoveryEngine,
 };
 
 /// Outcome of a self-improvement cycle.
@@ -72,10 +72,13 @@ pub struct LoopController {
     pub domain: Domain,
     /// Cross-domain knowledge transfer: tracks which patterns work across domains.
     pub affinity_graph: InterdomainAffinityGraph,
+    /// Autonomous strategy discovery engine for novel hypothesis generation.
+    pub discovery_engine: StrategyDiscoveryEngine,
 }
 
 impl LoopController {
     pub fn new(config: SelfModConfig) -> Self {
+        let affinity_graph = InterdomainAffinityGraph::new();
         Self {
             config,
             proposer: AdaptiveMutationProposer::new(),
@@ -83,7 +86,8 @@ impl LoopController {
             efficiency_baseline: 1.0,
             ledger: MutationLedger::new(),
             domain: Domain::Generic,
-            affinity_graph: InterdomainAffinityGraph::new(),
+            discovery_engine: StrategyDiscoveryEngine::new(affinity_graph.clone()),
+            affinity_graph,
         }
     }
 
@@ -116,7 +120,16 @@ impl LoopController {
 
         let signal = degradation_signal.unwrap();
 
-        // Step 2: Propose mutations (with ledger-informed confidence bias and domain awareness).
+        // Step 2: Discover novel strategies from cross-domain patterns and high-confidence hypotheses.
+        let discovered_strategies = self.discovery_engine.discover_strategies(
+            self.domain,
+            self.config.max_mutations_per_cycle,
+        );
+        for strategy in &discovered_strategies {
+            self.discovery_engine.record_proposed_mutation(strategy.mutation.description());
+        }
+
+        // Step 2b: Propose mutations (with ledger-informed confidence bias and domain awareness).
         let proposals = self.proposer.propose_mutations_with_domain(
             graph,
             signal,
@@ -224,6 +237,9 @@ impl LoopController {
 
         // Step 8: Advance ledger to next cycle
         self.ledger.next_cycle();
+
+        // Step 9: Sync discovery engine with latest affinity graph for next cycle
+        self.discovery_engine.sync_affinity_graph(self.affinity_graph.clone());
 
         Ok((best_graph, stats))
     }

@@ -18,6 +18,7 @@ pub mod loop_controller;
 pub mod ledger;
 pub mod design_and_marketing;
 pub mod transfer_learning;
+pub mod strategy_discovery;
 
 pub use multi_axis::{
     MultiAxisFitness, MultiAxisEvaluator, SelectionOutcome as MultiAxisSelectionOutcome,
@@ -31,6 +32,9 @@ pub use design_and_marketing::{
 };
 pub use transfer_learning::{
     PatternAbstraction, PatternExtractor, InterdomainAffinityGraph, TransferStats,
+};
+pub use strategy_discovery::{
+    HypothesizedStrategy, HypothesisSource, StrategyDiscoveryEngine,
 };
 
 use super::error::NtgError;

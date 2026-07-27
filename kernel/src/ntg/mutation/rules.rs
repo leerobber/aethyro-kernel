@@ -86,6 +86,67 @@ pub enum RetentionStrategy {
     PersonalizedRecommendations,
 }
 
+impl MutationRuleKind {
+    /// Get a human-readable description of this mutation.
+    pub fn description(&self) -> String {
+        match self {
+            // Topology mutations
+            MutationRuleKind::AddNode { label } => format!("add_node(label='{}')", label),
+            MutationRuleKind::RemoveNode { node_id } => format!("remove_node(id={})", node_id),
+            MutationRuleKind::AddEdge { from, to } => format!("add_edge({}→{})", from, to),
+            MutationRuleKind::RemoveEdge { from, to } => format!("remove_edge({}→{})", from, to),
+            MutationRuleKind::RewireEdge {
+                from,
+                old_to,
+                new_to,
+            } => format!("rewire_edge({}→{} → {}→{})", from, old_to, from, new_to),
+
+            // Web Design mutations
+            MutationRuleKind::AdjustColorContrast { increase } => {
+                format!("adjust_color_contrast(increase={})", increase)
+            }
+            MutationRuleKind::ReorderCTA { position } => {
+                format!("reorder_cta(position={:?})", position)
+            }
+            MutationRuleKind::SimplifyLayout { target_elements } => {
+                format!("simplify_layout(target_elements={})", target_elements)
+            }
+            MutationRuleKind::AdjustTypographyHierarchy { emphasis_level } => {
+                format!("adjust_typography(emphasis={})", emphasis_level)
+            }
+            MutationRuleKind::ChangeFormFields { num_fields } => {
+                format!("change_form_fields(num_fields={})", num_fields)
+            }
+            MutationRuleKind::ModifyImagePlacement { placement } => {
+                format!("modify_image_placement(placement={:?})", placement)
+            }
+            MutationRuleKind::AdjustWhitespace { spacing_ratio } => {
+                format!("adjust_whitespace(ratio={:.2})", spacing_ratio)
+            }
+
+            // Marketing mutations
+            MutationRuleKind::RefocusValueProposition { focus_area } => {
+                format!("refocus_value_prop(focus='{}')", focus_area)
+            }
+            MutationRuleKind::AdjustCopyTone { tone } => {
+                format!("adjust_copy_tone(tone={:?})", tone)
+            }
+            MutationRuleKind::ChangeTargetAudience { segment } => {
+                format!("change_audience(segment={:?})", segment)
+            }
+            MutationRuleKind::ModifyPricingTier { tier_index } => {
+                format!("modify_pricing(tier={})", tier_index)
+            }
+            MutationRuleKind::ShiftChannelMix { primary_channel } => {
+                format!("shift_channel(primary='{}')", primary_channel)
+            }
+            MutationRuleKind::AdjustRetentionStrategy { strategy } => {
+                format!("adjust_retention(strategy={:?})", strategy)
+            }
+        }
+    }
+}
+
 /// A versioned, auditable mutation rule.
 #[derive(Clone, Debug)]
 pub struct MutationRule {
