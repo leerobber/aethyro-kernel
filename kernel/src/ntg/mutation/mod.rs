@@ -34,6 +34,8 @@ pub mod brain_beta;
 pub mod brain_gamma;
 pub mod brain_delta;
 pub mod brain_integration;
+pub mod self_optimization;
+pub mod autonomous_improvement;
 
 pub use multi_axis::{
     MultiAxisFitness, MultiAxisEvaluator, SelectionOutcome as MultiAxisSelectionOutcome,
@@ -105,6 +107,14 @@ pub use brain_integration::{
     TwinBrainAgent, CrossBrainChannel, SyncHint, RoutingHint, BrainDecision, TwinBrainReport,
     TwinBrainMetrics, QuadBrainAgent, QuadBrainMetrics, QuadBrainReport, HealthSnapshot,
     StrategySnapshot, ForecastSnapshot,
+};
+pub use self_optimization::{
+    SelfOptimizer, SelfOptimizationConfig, BottleneckType, BottleneckDetection,
+    OptimizationProposal, PerformanceMetrics, OptimizationCycleSummary,
+};
+pub use autonomous_improvement::{
+    AutonomousImprover, AutonomousImproverConfig, ImprovementRound, ImprovementRoundResult,
+    AutonomousImprovementSummary,
 };
 
 use super::error::NtgError;

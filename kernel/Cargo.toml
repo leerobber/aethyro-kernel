@@ -14,6 +14,10 @@ rayon = "1.7"
 [dev-dependencies]
 criterion = "0.5"
 
+[features]
+default = []
+cuda = []  # Enable CUDA GPU acceleration for Brain δ/γ
+
 [lib]
 name = "ntg_kernel"
 crate-type = ["cdylib", "rlib"]

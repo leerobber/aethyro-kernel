@@ -13,6 +13,9 @@ pub mod ntg;
 pub mod genomic;
 pub mod health;
 
+#[cfg(feature = "cuda")]
+pub mod cuda;
+
 pub use genomic::{
     VcfParser, VcfChromosome, BitstreamGenotypes, LdComputer, LdMatrix, LdPair, BlockDetector,
     HaplotypeBlock, BlockStatistics, compute_block_statistics,
