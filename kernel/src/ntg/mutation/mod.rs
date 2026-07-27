@@ -36,6 +36,8 @@ pub mod brain_delta;
 pub mod brain_integration;
 pub mod self_optimization;
 pub mod autonomous_improvement;
+pub mod self_healing;
+pub mod optimization_dsl;
 
 pub use multi_axis::{
     MultiAxisFitness, MultiAxisEvaluator, SelectionOutcome as MultiAxisSelectionOutcome,
@@ -115,6 +117,14 @@ pub use self_optimization::{
 pub use autonomous_improvement::{
     AutonomousImprover, AutonomousImproverConfig, ImprovementRound, ImprovementRoundResult,
     AutonomousImprovementSummary,
+};
+pub use self_healing::{
+    SelfHealer, SelfHealerConfig, DiagnosedError, RemediationAction, RemediationType,
+    ErrorSeverity, RootCause, SelfHealerSummary,
+};
+pub use optimization_dsl::{
+    OptimizationDSLCompiler, OptimizationRule, Condition, Action, AgentRuleLibrary,
+    AgentLearningStats, RuleExecution,
 };
 
 use super::error::NtgError;
