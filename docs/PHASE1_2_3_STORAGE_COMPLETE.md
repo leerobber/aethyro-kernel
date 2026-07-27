@@ -326,7 +326,7 @@ cargo bench --bench phase1_tobl # TOBL kernel performance (when added)
 ## References
 
 - **PHASE1_2_3_IMPLEMENTATION.md** — original SIMD + FFI design
-- **PHASE3_SUMMARY.md** — ledger + mutation engine integration
+- **STATUS.md** — ledger + mutation engine integration, current status
 - **FFI_INTEGRATION.md** — C orchestrator usage guide
 - **ADR 0004** — safety rails + architectural decisions
 

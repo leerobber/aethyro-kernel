@@ -290,7 +290,7 @@ cargo clippy            # Code quality
 - **PHASE1_2_3_IMPLEMENTATION.md** — original SIMD + FFI design
 - **PHASE1_2_3_STORAGE_COMPLETE.md** — storage architecture (this build)
 - **TOBL_FFI_REFERENCE.md** — C API usage guide
-- **PHASE3_SUMMARY.md** — ledger integration
+- **STATUS.md** — ledger integration, current status
 - **ADR 0004** — safety rails + decisions
 
 ---

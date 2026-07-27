@@ -137,6 +137,24 @@ impl BitSlicedTernary {
         }
         total
     }
+
+    /// Same result as [`Self::dot_product_parallel`], using a real AVX-512
+    /// VPOPCNTDQ kernel (8 words / 512 elements per instruction) when the
+    /// host actually has `avx512f` + `avx512vpopcntdq`, falling back to the
+    /// portable path otherwise. This is the dispatch the runtime should use;
+    /// `dot_product_parallel` stays as the always-available ground truth
+    /// that the AVX-512 path is tested against.
+    #[inline]
+    pub fn dot_product_auto(a: &Self, b: &Self) -> i64 {
+        #[cfg(target_arch = "x86_64")]
+        {
+            if is_x86_feature_detected!("avx512f") && is_x86_feature_detected!("avx512vpopcntdq")
+            {
+                return unsafe { super::bit_sliced_avx512::dot_product_avx512(a, b) };
+            }
+        }
+        Self::dot_product_parallel(a, b)
+    }
 }
 
 #[cfg(test)]

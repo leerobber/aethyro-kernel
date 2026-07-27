@@ -17,6 +17,8 @@
 //! for Phase 3+ Reflexive Fitness integration.
 
 pub mod bit_sliced_ternary;
+#[cfg(target_arch = "x86_64")]
+pub mod bit_sliced_avx512;
 pub mod packed_ternary;
 pub mod sparse_bit_sliced_ternary;
 pub mod tobl_kernel;

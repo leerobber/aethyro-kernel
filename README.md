@@ -5,22 +5,37 @@ self-evolving-graph-topology inference engine, wrapped in a
 tamper-evident audit ledger, engineered for air-gapped / sovereign edge
 deployment.
 
-This is a clean extract of the kernel from
-[aethyro-ntg](https://github.com/leerobber/aethyro-ntg) — just the
-tested Rust crate and its docs, with a round of correctness/soundness
-fixes applied (FFI unsound-pointer bugs, a ledger audit-integrity bug,
-an O(n²) hot path in the graph scheduler, two corrupted identifiers,
-and the CI-breaking clippy errors that had crept back in). No
-unrelated work (genomics pipeline, other side-projects) carried over.
+This started as an extract of the kernel from
+[aethyro-ntg](https://github.com/leerobber/aethyro-ntg), with a round of
+correctness/soundness fixes applied (FFI unsound-pointer bugs, a ledger
+audit-integrity bug, an O(n²) hot path in the graph scheduler, two
+corrupted identifiers, and the CI-breaking clippy errors that had crept
+back in).
+
+**Correction (2026-07-26):** this repo originally shipped the *entire*
+`aethyro-ntg` tree despite claiming otherwise here — including the full
+pre-pivot disease-detection genomics pipeline, which had zero
+reachability from the kernel. That's now actually fixed: `genomic/` is
+down to the 14 files that `ntg::mutation::multi_axis`'s Rung 2
+`biological_consistency` fitness axis genuinely depends on (a real VCF
+→ LD → haplotype-block → chromosome-brain → `SovereignBrain` chain), not
+a general-purpose genomics library. Everything else in that tree —
+disease-detection agents, evolution/phenotype/quality-control/
+extended-validation pipelines, `vitascale/`, and the 10 demo binaries
+that only exercised those — was deleted as dead weight. If this claim
+ever drifts from reality again, trust `find kernel/src -name '*.rs' |
+xargs grep` over this paragraph.
 
 **Current status (authoritative):**  
 → **[docs/STATUS.md](docs/STATUS.md)** — full research-agency report, test
 proof matrix, gaps, and next priorities.  
 → **[docs/ROADMAP.md](docs/ROADMAP.md)** — phased gates.
 
-**As of 2026-07-09:** pre-alpha research kernel, **capability v10**,
-Phase 0–5 COMPLETE (calib + precision + GraphNode warm-start path). Not
-benchmarked against production aethyro.com inference; no GTM decision.
+**As of 2026-07-27:** pre-alpha research kernel, **capability v10**,
+Phase 0–5 COMPLETE (calib + precision + GraphNode warm-start path), 341
+tests green, clippy clean, real AVX-512 VPOPCNTDQ kernel (5.9-7.1× over
+portable bit-sliced, measured not assumed). Not benchmarked against
+production aethyro.com inference; no GTM decision.
 
 ## What's actually new (precise claim)
 
@@ -66,6 +81,7 @@ echo '{"layers":[{"nodes":[{"id":0},{"id":1}]}]}' | python3 tools/ingest.py
 | Path | Purpose |
 |------|---------|
 | `kernel/` | Rust crate: ternary core, storage, graph, ledger, mutation, runtime, calib |
+| `kernel/src/genomic/` | VCF → LD → haplotype-block → `SovereignBrain` chain feeding Rung 2 fitness (`ntg::mutation::multi_axis`) — not a general genomics pipeline |
 | `tools/ingest.py` | Sequential `GraphNode.id` contract for native forward |
 | `tools/dev.sh` | One-shot test / calib / model / bench workflows |
 | `artifacts/models/` | Local CalibModel dumps (`dev.sh model`; not required in git) |
@@ -82,15 +98,17 @@ echo '{"layers":[{"nodes":[{"id":0},{"id":1}]}]}' | python3 tools/ingest.py
 
 1. **Ternary core** — scalar golden `matmul_scalar`, encoding  
 2. **Storage** — packed 2-bit, dual-stream bit-sliced, sparse COO  
-3. **SIMD / TOBL / FFI** — runtime dispatch, C ABI, OpStats  
+3. **SIMD / TOBL / FFI** — runtime dispatch (real AVX2, AVX-512, and NEON kernels, not just detection), C ABI, OpStats  
 4. **Graph + SIS** — topology, doc/path parse, fs-event pure layer, adj_list  
 5. **Native runtime** — `forward_native_parallel` + density-based `AccelManager`  
 6. **Ledger + self-mod** — SHA-256 chain, budgets, fitness, **off by default**
+7. **Rung 2 multi-axis fitness** — task/structure/biology/safety scoring over `SovereignBrain`, real VCF-derived biological-consistency signal
 
 ## Explicitly not done
 
-- Full AVX-512 VPOPCNTDQ kernels (detect yes, full kernels no)  
-- GPU/NPU (re-scoped: CPU TOBL 12–20×; revisit at large tensors)  
+- End-to-end / GEMM-scale benchmark (only dot-product micro-benchmarks exist)
+- NEON verified only via QEMU aarch64 emulation cross-compile — no real ARM CI/hardware yet
+- GPU/NPU (re-scoped: CPU TOBL now 43-52× over scalar with AVX-512; revisit at large tensors)  
 - Phase 6 integration / product head-to-head vs aethyro.com  
 - Self-mod enabled by default (stays off)
 - Lazy PIXEL-lite glyph fingerprints (ADR 0003 design only)

@@ -517,3 +517,153 @@ graph≈0.20 µs  static≈0.02 µs  ratio≈10×  (same character as Phase 2)
 `--self-mod`: AddNode proposed, rejected by fitness, ledgered.
 
 **Phase 5 exit criteria:** met — see `docs/phases/PHASE_5_COMPLETE.md`.
+
+## 2026-07-26 cleanup + release-profile pass
+
+### `[profile.release]` lto + codegen-units=1
+
+Added `lto = true`, `codegen-units = 1` to `kernel/Cargo.toml` (previously
+unset -> Cargo defaults of no LTO, 16 codegen units). Measured
+`density_bench` before/after, same host, same command, median of 200 iters:
+
+| density | scalar µs (before → after) | bit-sliced µs (before → after) | sparse µs (before → after) |
+|--------:|:---------------------------:|:-------------------------------:|:----------------------------:|
+| 1% | 94.13 → 88.10 (-6.4%) | 13.20 → 12.38 (-6.2%) | 6.12 → 6.46 (+5.6%, noise-level) |
+| 10% | 92.33 → 87.27 (-5.5%) | 12.74 → 12.39 (-2.7%) | 20.80 → 20.86 (~flat) |
+| 50% | 92.39 → 88.27 (-4.5%) | 13.17 → 12.37 (-6.1%) | 28.20 → 20.91 (-25.8%) |
+
+`graph_overhead_bench` unchanged in character (graph≈0.20µs, static≈0.03µs,
+ratio≈6×; the earlier ≈10× figure and this run differ mainly by measurement
+noise on a small 8-node sample, not a regression). Full `cargo test` (338
+tests) and `cargo clippy -- -D warnings` stayed green. Release build time
+rose from ~10s to ~46s (LTO cost) -- acceptable, release builds aren't the
+inner dev loop. Real, measured, small win; not claimed as more than that.
+
+### Dead-code / scope cleanup
+
+The repo previously carried the entire pre-pivot genomics research tree
+despite the README claiming a "clean kernel-only extract" (untrue -- see
+git history before this commit). Traced actual `use` dependencies rather
+than trusting the doc: `ntg::mutation::multi_axis` (Rung 2 fitness)
+genuinely depends on `genomic::sovereign_brain`, so that chain (14 files)
+was kept. Everything else in `genomic/` -- `agents.rs`, `domain_agents.rs`,
+`evolution.rs`, `phenotype.rs`, `report_gen.rs`, `quality_control.rs`,
+`extended_validation.rs`, `optimized_core.rs`, `epigenetic_engine.rs`,
+`vitascale/` -- had zero reachability from the kernel or from CI and was
+deleted, along with the 10 `bin/` demos that exclusively exercised it
+(`chromosome_brain_test`, `domain_disease_{complete,test}`,
+`phase_{c_synthesis,d_quality_control,e_extended_validation}`,
+`optimized_core_demo`, `system_evolution_node`, `kairos_stage{0,1}`).
+Test count dropped 401 → 338 (the difference is exactly the deleted
+modules' own unit tests, not a coverage loss on kept code). `cargo build
+--lib --bins --tests --benches` and `cargo clippy --all-targets` both zero
+warnings after the cut, not just zero errors.
+
+## 2026-07-26/27 — Real AVX-512 VPOPCNTDQ kernel (Phase 1 gap closed)
+
+STATUS.md's P1 list had carried "real AVX-512 VPOPCNTDQ kernels for dense
+dual-stream words" as open since at least 2026-07-09: `resolve_avx512_hardware()`
+correctly detected `avx512f`+`avx512vpopcntdq` and labeled the device
+`Avx512Cpu`, but `runtime::bit_sliced_dot_fast` always called
+`BitSlicedTernary::dot_product_parallel` regardless -- one `u64` word
+(64 elements) per `count_ones()` call, on every host, detected hardware or not.
+
+Added `ntg::storage::bit_sliced_avx512::dot_product_avx512`: processes 8
+words (512 elements) per instruction via `_mm512_popcnt_epi64`, same
+four-popcount formula as the portable path
+(`(pos&pos)+(neg&neg)-(pos&neg)-(neg&pos)`), with a scalar tail for any
+remainder under 8 words. `BitSlicedTernary::dot_product_auto` runtime-detects
+the feature pair and dispatches to it, falling back to the portable path
+otherwise; `bit_sliced_dot_fast` now calls `dot_product_auto` instead of
+`dot_product_parallel` directly, so detected hardware is actually used, not
+just reported.
+
+**Correctness proof (not just claimed):** 5 new tests compare the AVX-512
+kernel against the portable reference bit-for-bit across sizes chosen to
+cross the 8-word/512-element SIMD boundary in every direction (0, 1, 63,
+64, 65, 127, 128, 511, 512, 513, 1000, 4096, 4099 elements; all-positive,
+all-negative, all-zero, and pseudorandom ternary patterns) -- all pass on
+real `avx512f`+`avx512vpopcntdq` hardware, not emulated.
+
+**Measured speedup** (`density_bench`, n=262144, median of 200 iters,
+release + LTO build, same host as the profile-pass numbers above):
+
+| density | scalar µs | bit-sliced (portable) µs | bit-sliced (AVX-512) µs | speedup vs portable bit-sliced | speedup vs scalar |
+|--------:|----------:|-------------------------:|-------------------------:|--------------------------------:|--------------------:|
+| 1% | 95.70 | 13.22 | 1.86 | 7.13× | 51.6× |
+| 10% | 95.35 | 13.22 | 2.23 | 5.93× | 42.8× |
+| 50% | 88.31 | 13.21 | 1.86 | 7.11× | 47.5× |
+
+`sums_match: true` on every row (the bench itself cross-checks scalar,
+bit-sliced, AVX-512, and sparse sums and fails the process on divergence).
+On a host without `avx512vpopcntdq`, `dot_product_auto` transparently falls
+back to the portable path -- `density_bench` prints `avx512_vpopcntdq=false`
+and the AVX-512 column equals the bit-sliced column exactly (same code
+path), so this doesn't break CI on runners without the feature.
+
+`cargo test`: 341 passed (338 + 3 new). `cargo clippy -- -D warnings` and
+`cargo clippy --all-targets -- -D warnings`: both clean.
+
+## 2026-07-27 — Real NEON kernels (Phase 1 gap closed)
+
+The other half of Phase 1's SIMD gap: `ntg::simd::neon::matmul_neon_inner`
+had a comment reading "Real NEON would use vmull_s8 and vaddw_s32" instead
+of doing it (scalar loop instead), and `ntg::storage::tobl_kernel::tobl_dot_neon`
+was a bare `// Placeholder` returning the scalar result directly. No ARM CI
+runner exists for this repo, so this had never been exercised at all.
+
+**Set up real ARM64 verification** rather than writing untested intrinsics:
+`rustup target add aarch64-unknown-linux-gnu`, `apt install gcc-aarch64-linux-gnu
+qemu-user-static`, `~/.cargo/config.toml` pointing the target's linker at
+`aarch64-linux-gnu-gcc` and its test/run `runner` at `qemu-aarch64-static`
+(with `QEMU_LD_PREFIX=/usr/aarch64-linux-gnu` for dynamic linking). This
+gives genuine instruction-level NEON execution under emulation -- not real
+silicon, but real `vmull_s8`/`vaddlvq_s16` instructions actually decoded and
+executed, not just compiled. Verified the exact intrinsics against known
+answers (including i8-range overflow-adjacent cases: 127*127 + -128*-128 +
+...) before touching the kernel code.
+
+**Implemented:**
+- `matmul_neon_inner`: 8-lane `vmull_s8` (widening i8×i8→i16, safe for the
+  full i8 range) + `vaddlvq_s16` (widening horizontal reduce to i32, avoids
+  the i16-lane overflow a naive `vaddvq_s16` risks once several chunks
+  accumulate), scalar tail for `k % 8 != 0`.
+- `tobl_dot_neon`: same unpack-packed-ternary-then-multiply approach as the
+  existing AVX2 `tobl_dot_avx2`, at NEON's native 8-lane width (four chunks
+  per 32-element word instead of AVX2's two 16-lane halves).
+
+**Found and fixed in the process:** a pre-existing latent bug in the
+original `neon_matches_scalar` test -- its signature used a bare `NtgError`
+that was never actually in scope (the `use super::*` was inside the
+function body, too late to affect the signature). This had silently never
+compiled, since nothing had ever built this crate's `aarch64`-gated code
+before. Fixed to the same fully-qualified-path pattern the sibling test
+already used correctly.
+
+**Correctness proof:** 6 new tests (4 for `matmul_neon_inner`, 2 for
+`tobl_dot_neon`) comparing against the scalar reference bit-for-bit,
+including sizes chosen to cross the 8-lane/32-element boundaries in every
+direction, full-i8-range values, and non-multiple-of-8 remainders. All run
+and pass under `cargo test --target aarch64-unknown-linux-gnu`
+(QEMU-emulated). Full suite also re-run clean under emulation: 308 lib
+tests passed (one architecture-specific count difference from the x86_64
+run, expected -- different tests are `cfg`-gated per target).
+
+**One flaky test observed under emulation, not fixed:**
+`calib::tests::self_mod_probe_enabled_logs_ledger` (a 5ms wall-clock
+budget check) failed once when running the full suite in parallel under
+QEMU load, but passed reliably on repeat runs both in isolation and as
+part of the full suite, and never failed on native x86_64 across multiple
+runs. Not reproducible enough to root-cause further, and irrelevant to the
+real CI environment (native x86_64, no emulation) -- noted rather than
+chased.
+
+No performance numbers claimed here: QEMU user-mode emulation timing has
+no relationship to real ARM64 hardware performance, so a "speedup" measured
+under emulation would be meaningless. This entry is about correctness
+verification only.
+
+`cargo test` (x86_64, the real CI target): 341 passed, unchanged (all new
+NEON tests are `aarch64`-gated and invisible on x86_64). `cargo clippy
+-- -D warnings` and `cargo clippy --all-targets -- -D warnings`: both
+clean.
