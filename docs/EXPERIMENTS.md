@@ -8,6 +8,51 @@ sits next to a real measured 11% bits-per-character win, both kept).
 An experiment that didn't pan out and is documented here is more
 valuable than one that was quietly dropped.
 
+## 2026-07-27: Phase 6 kernel gate — ternary GEMM vs. scalar f32 GEMM head-to-head
+
+**Question:** Does the ternary bit-sliced kernel beat scalar f32 on both latency
+and memory at production-like problem sizes? This is the kernel half of the
+Phase 6 ship/no-ship decision gate.
+
+**Method:** `cargo run --release --bin phase6_benchmark`. Compares:
+- Scalar f32 triple-loop GEMM (baseline) vs. `BitSlicedTernary::dot_product_auto()`
+  (AVX-512 VPOPCNTDQ path on the test machine)
+- Problem sizes: 64×64 / 256×256 / 512×512 / 1024×1024 (square GEMM)
+- 3 warmup reps, 10 bench reps, median reported
+- Correctness gate first: `matmul_scalar` == `dot_product_auto` at k=128
+
+**Hardware:** x86_64 + AVX-512 VPOPCNTDQ (real hardware popcount)
+
+**Results (2026-07-27):**
+
+| Problem size | f32 latency (µs) | Ternary latency (µs) | Speedup | f32 memory | Ternary memory | Memory ratio |
+|---|---:|---:|---:|---:|---:|---:|
+| small  (64×64) | 190 | 34 | 5.59× | 32 KB | 2 KB | 16.0× |
+| medium (256×256) | 18,189 | 1,431 | 12.71× | 512 KB | 32 KB | 16.0× |
+| large  (512×512) | 144,646 | 1,513 | 95.60× | 2,048 KB | 128 KB | 16.0× |
+| xlarge (1024×1024) | 4,254,374 | 9,237 | 460.58× | 8,192 KB | 512 KB | 16.0× |
+
+Average speedup: **143.6×**. Average memory compression: **16.0×** (f32 / ternary).
+
+**Phase 6 kernel gate: ✅ PASS** — ternary is faster AND more memory-efficient at all sizes.
+
+**What this measures and what it doesn't:**
+- ✅ Measures: GEMM kernel performance (the part the kernel codebase can benchmark)
+- ✅ Measures: memory footprint of 2-bit packed vs. 32-bit float weight representation
+- ✅ Measures: correctness — `dot_product_auto` is bit-identical to `matmul_scalar` reference
+- ❌ Does NOT measure: aethyro.com production inference pipeline (requires live API access)
+- ❌ Does NOT measure: full-pipeline latency (FFI host overhead, Python bridge, API layer)
+- ❌ Does NOT measure: task accuracy on real aethyro.com workloads
+- ❌ Does NOT measure: GPU throughput (CPU TOBL 12-52× already established; GPU deferred)
+
+**Honest note on the f32 baseline:** The f32 GEMM is unoptimized scalar — no BLAS, no SIMD.
+A fair comparison to an optimized BLAS/MKL library would show a lower speedup. The memory
+ratio (16.0×) is fundamental and hardware-path-independent. The latency comparison is
+legitimate for demonstrating that ternary bit-packing can outrun naive f32 loops.
+
+**Next:** The product half of Phase 6 (head-to-head on live aethyro.com workload) requires
+live API integration and cannot be completed in this repo.
+
 ## 2026-07-08: is ChronosLedger actually the "tamper-evident, hash-chained ledger" ADR 0001/0002 assumed it was?
 
 **Why this check happened:** before merging the first substantial batch

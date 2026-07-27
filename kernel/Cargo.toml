@@ -109,3 +109,7 @@ path = "src/bin/sovereign_campaign.rs"
 [[bin]]
 name = "phase3_evolution"
 path = "src/bin/phase3_evolution.rs"
+
+[[bin]]
+name = "phase6_benchmark"
+path = "src/bin/phase6_benchmark.rs"
