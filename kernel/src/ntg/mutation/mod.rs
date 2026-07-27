@@ -23,6 +23,10 @@ pub mod temporal_learning;
 pub mod causality_inference;
 pub mod portfolio_learning;
 pub mod knowledge_distillation;
+pub mod research_paper;
+pub mod study_design;
+pub mod peer_review;
+pub mod publication_pipeline;
 
 pub use multi_axis::{
     MultiAxisFitness, MultiAxisEvaluator, SelectionOutcome as MultiAxisSelectionOutcome,
@@ -51,6 +55,18 @@ pub use portfolio_learning::{
 };
 pub use knowledge_distillation::{
     KnowledgeDistillationEngine, DistilledRule, MetaPattern, RuleCondition, RuleAction,
+};
+pub use research_paper::{
+    ResearchPaperEngine, ResearchPaper, PaperSection, Citation,
+};
+pub use study_design::{
+    StudyDesignEngine, ExperimentalDesign, DesignType, StudyProtocol, PowerAnalysis,
+};
+pub use peer_review::{
+    PeerReviewEngine, ReviewerPersona, ReviewerFeedback, ReviewRoundResults, Rebuttal,
+};
+pub use publication_pipeline::{
+    PublicationPipeline, Manuscript, PublicationVenue, ManuscriptStatus,
 };
 
 use super::error::NtgError;

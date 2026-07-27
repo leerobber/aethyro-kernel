@@ -14,6 +14,7 @@ use super::{
     MutationCycle, SelfModConfig, AdaptiveMutationProposer, DegradationSignal, MutationLedger, Domain,
     InterdomainAffinityGraph, PatternExtractor, StrategyDiscoveryEngine, TemporalLearningEngine,
     CausalityInferenceEngine, PortfolioLearningEngine, KnowledgeDistillationEngine,
+    ResearchPaperEngine, StudyDesignEngine, PeerReviewEngine, PublicationPipeline,
 };
 
 /// Outcome of a self-improvement cycle.
@@ -83,6 +84,14 @@ pub struct LoopController {
     pub portfolio_engine: PortfolioLearningEngine,
     /// Knowledge distillation: compress learned knowledge into rules.
     pub distillation_engine: KnowledgeDistillationEngine,
+    /// Research paper generation: automated paper synthesis from mutations.
+    pub research_paper_engine: ResearchPaperEngine,
+    /// Study design: experimental design generation and validation.
+    pub study_design_engine: StudyDesignEngine,
+    /// Peer review: automated reviewer simulation and feedback.
+    pub peer_review_engine: PeerReviewEngine,
+    /// Publication pipeline: end-to-end manuscript submission workflow.
+    pub publication_pipeline: PublicationPipeline,
 }
 
 impl LoopController {
@@ -101,6 +110,10 @@ impl LoopController {
             causality_engine: CausalityInferenceEngine::new(),
             portfolio_engine: PortfolioLearningEngine::new(),
             distillation_engine: KnowledgeDistillationEngine::new(),
+            research_paper_engine: ResearchPaperEngine::new(),
+            study_design_engine: StudyDesignEngine::new(),
+            peer_review_engine: PeerReviewEngine::new(),
+            publication_pipeline: PublicationPipeline::new(),
         }
     }
 
@@ -354,6 +367,40 @@ impl LoopController {
         report.push_str(&self.portfolio_learning_report());
         report.push_str("\n--- Knowledge Distillation ---\n");
         report.push_str(&self.knowledge_distillation_report());
+        report
+    }
+
+    /// Get research paper generation report (Phase 6.11)
+    pub fn research_paper_report(&self) -> String {
+        self.research_paper_engine.report()
+    }
+
+    /// Get study design report (Phase 6.11)
+    pub fn study_design_report(&self) -> String {
+        self.study_design_engine.report()
+    }
+
+    /// Get peer review report (Phase 6.11)
+    pub fn peer_review_report(&self) -> String {
+        self.peer_review_engine.report()
+    }
+
+    /// Get publication pipeline report (Phase 6.11)
+    pub fn publication_pipeline_report(&self) -> String {
+        self.publication_pipeline.report()
+    }
+
+    /// Get comprehensive research and publication report (Phase 6.11)
+    pub fn research_and_publication_report(&self) -> String {
+        let mut report = String::from("=== Phase 6.11: Research & Academic Discovery Report ===\n\n");
+        report.push_str("--- Research Paper Generation ---\n");
+        report.push_str(&self.research_paper_report());
+        report.push_str("\n--- Study Design ---\n");
+        report.push_str(&self.study_design_report());
+        report.push_str("\n--- Peer Review ---\n");
+        report.push_str(&self.peer_review_report());
+        report.push_str("\n--- Publication Pipeline ---\n");
+        report.push_str(&self.publication_pipeline_report());
         report
     }
 }
