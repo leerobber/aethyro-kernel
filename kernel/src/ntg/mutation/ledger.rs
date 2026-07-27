@@ -9,6 +9,7 @@
 
 use super::rules::MutationRuleKind;
 use super::DegradationSignal;
+use super::super::error::NtgError;
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 
@@ -412,6 +413,49 @@ impl MutationLedger {
 
         lines.join("\n")
     }
+
+    /// Save ledger to JSON file
+    pub fn save(&self, path: &str) -> Result<(), NtgError> {
+        use std::fs::File;
+        use std::io::Write;
+
+        let json = serde_json::to_string_pretty(&self)
+            .map_err(|e| NtgError::InvalidInput(format!("JSON serialization failed: {}", e)))?;
+
+        let mut file = File::create(path)
+            .map_err(|e| NtgError::InvalidInput(format!("Failed to create ledger file: {}", e)))?;
+
+        file.write_all(json.as_bytes())
+            .map_err(|e| NtgError::InvalidInput(format!("Failed to write ledger file: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Load ledger from JSON file
+    pub fn load(path: &str) -> Result<Self, NtgError> {
+        use std::fs::File;
+        use std::io::Read;
+
+        let mut file = File::open(path)
+            .map_err(|e| NtgError::InvalidInput(format!("Failed to open ledger file: {}", e)))?;
+
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)
+            .map_err(|e| NtgError::InvalidInput(format!("Failed to read ledger file: {}", e)))?;
+
+        let ledger: Self = serde_json::from_str(&contents)
+            .map_err(|e| NtgError::InvalidInput(format!("JSON deserialization failed: {}", e)))?;
+
+        Ok(ledger)
+    }
+
+    /// Try to load from path; create new if not found
+    pub fn load_or_new(path: &str) -> Result<Self, NtgError> {
+        match Self::load(path) {
+            Ok(ledger) => Ok(ledger),
+            Err(_) => Ok(Self::new()),
+        }
+    }
 }
 
 impl Default for MutationLedger {
@@ -671,5 +715,92 @@ mod tests {
 
         let conf = ledger.confidence_for("RemoveEdge { from: 1, to: 2 }", DegradationSignal::LatencyDominant);
         assert!(conf >= 0.7); // 80% success rate
+    }
+
+    #[test]
+    fn ledger_save_roundtrip() -> Result<(), NtgError> {
+        let mut ledger = MutationLedger::new();
+
+        // Record some mutations
+        for i in 0..3 {
+            ledger.record_mutation(
+                MutationRuleKind::RemoveNode { node_id: i },
+                DegradationSignal::MemoryDominant,
+                0.75,
+                0.78 + (i as f64 * 0.01),
+                i % 2 == 0,
+                0.5,
+            );
+        }
+        ledger.next_cycle();
+
+        // Save to temporary file
+        let path = "/tmp/test_ledger.json";
+        ledger.save(path)?;
+
+        // Load back
+        let loaded = MutationLedger::load(path)?;
+
+        // Verify they match
+        assert_eq!(ledger.events().len(), loaded.events().len());
+        assert_eq!(ledger.cycle_counter, loaded.cycle_counter);
+
+        // Clean up
+        std::fs::remove_file(path).ok();
+        Ok(())
+    }
+
+    #[test]
+    fn ledger_load_or_new_creates_missing() -> Result<(), NtgError> {
+        let path = "/tmp/nonexistent_ledger.json";
+
+        // Should create new if file doesn't exist
+        let ledger = MutationLedger::load_or_new(path)?;
+        assert_eq!(ledger.events().len(), 0);
+        assert_eq!(ledger.cycle_counter, 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn ledger_persistence_preserves_knowledge() -> Result<(), NtgError> {
+        let mut ledger = MutationLedger::new();
+
+        // Record mutations with different success rates
+        for i in 0..5 {
+            ledger.record_mutation(
+                MutationRuleKind::RemoveEdge { from: 1, to: 2 },
+                DegradationSignal::LatencyDominant,
+                0.80,
+                0.81,
+                i < 4, // 4/5 successful
+                0.5,
+            );
+        }
+
+        let original_best = ledger.best_mutation_for_signal(DegradationSignal::LatencyDominant);
+        let original_conf = ledger.confidence_for(
+            "RemoveEdge { from: 1, to: 2 }",
+            DegradationSignal::LatencyDominant,
+        );
+
+        // Save and load
+        let path = "/tmp/test_ledger_knowledge.json";
+        ledger.save(path)?;
+        let loaded = MutationLedger::load(path)?;
+
+        // Verify knowledge is identical
+        let loaded_best = loaded.best_mutation_for_signal(DegradationSignal::LatencyDominant);
+        let loaded_conf = loaded.confidence_for(
+            "RemoveEdge { from: 1, to: 2 }",
+            DegradationSignal::LatencyDominant,
+        );
+
+        assert_eq!(original_best, loaded_best);
+        assert!((original_conf - loaded_conf).abs() < 0.0001);
+
+        // Clean up
+        std::fs::remove_file(path).ok();
+        Ok(())
     }
 }

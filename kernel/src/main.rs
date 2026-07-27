@@ -93,6 +93,8 @@ struct NanoKeymaster {
     health_monitor: HealthMonitor,
     /// Autonomous self-improvement loop controller: proposes mutations when degradation detected.
     improvement_loop: LoopController,
+    /// Path to persistent mutation ledger (for cross-session learning).
+    mutation_ledger_path: String,
     /// External backend URL, if configured. Credential vault.
     external_url: Option<String>,
     call_counter: u64,
@@ -107,12 +109,21 @@ impl NanoKeymaster {
             fitness_improvement_threshold: 1.01, // 1% improvement required
             auto_rollback_on_regression: true,
         };
+        let mut improvement_loop = LoopController::new(improvement_config);
+
+        // Load mutation ledger from persistent storage (if available)
+        let ledger_path = "mutation_ledger.json".to_string();
+        if let Err(e) = improvement_loop.load_ledger(&ledger_path) {
+            eprintln!("[startup] warning: failed to load mutation ledger: {}", e);
+        }
+
         Self {
             ledger: TamperEvidentLedger::new(None).expect("ledger init"),
             memory: HashMap::new(),
             tmg_memory: IntentMemory::new(),
             health_monitor: HealthMonitor::new(100, 1_000_000), // 100 µs baseline, 1MB baseline memory
-            improvement_loop: LoopController::new(improvement_config),
+            improvement_loop,
+            mutation_ledger_path: ledger_path,
             external_url,
             call_counter: 0,
             model,
@@ -411,6 +422,13 @@ impl NanoKeymaster {
                     if self.improvement_loop.cycle_count % 5 == 0 {
                         eprintln!("[improvement:loop] === LEARNING REPORT (Cycle {}) ===", self.improvement_loop.cycle_count);
                         eprintln!("{}", self.improvement_loop.learning_report());
+                    }
+
+                    // Save ledger for persistence across sessions (every 10 cycles)
+                    if self.improvement_loop.cycle_count % 10 == 0 {
+                        if let Err(e) = self.improvement_loop.save_ledger(&self.mutation_ledger_path) {
+                            eprintln!("[improvement:loop] warning: failed to save mutation ledger: {}", e);
+                        }
                     }
                 }
                 Err(e) => {

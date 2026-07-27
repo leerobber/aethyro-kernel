@@ -196,6 +196,17 @@ impl LoopController {
     pub fn learning_report(&self) -> String {
         self.ledger.report()
     }
+
+    /// Save the ledger to a file for persistence across sessions
+    pub fn save_ledger(&self, path: &str) -> Result<(), NtgError> {
+        self.ledger.save(path)
+    }
+
+    /// Load the ledger from a file, or create new if not found
+    pub fn load_ledger(&mut self, path: &str) -> Result<(), NtgError> {
+        self.ledger = MutationLedger::load_or_new(path)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
