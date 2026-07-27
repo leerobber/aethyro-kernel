@@ -16,6 +16,7 @@ pub mod multi_axis;
 pub mod adaptive;
 pub mod loop_controller;
 pub mod ledger;
+pub mod design_and_marketing;
 
 pub use multi_axis::{
     MultiAxisFitness, MultiAxisEvaluator, SelectionOutcome as MultiAxisSelectionOutcome,
@@ -24,6 +25,9 @@ pub use multi_axis::{
 pub use adaptive::{AdaptiveMutationProposer, DegradationSignal, Domain};
 pub use loop_controller::{LoopController, LoopOutcome, LoopStats};
 pub use ledger::{MutationLedger, MutationEvent, CohortStats, MutationKnowledge};
+pub use design_and_marketing::{
+    DomainMetrics, WebDesignMetrics, MarketingMetrics, RetentionMetrics,
+};
 
 use super::error::NtgError;
 use super::graph::Graph;

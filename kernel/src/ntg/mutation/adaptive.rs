@@ -7,7 +7,7 @@
 //!
 //! Proposes mutations likely to improve the detected bottleneck.
 
-use super::rules::{MutationRule, MutationRuleKind};
+use super::rules::{MutationRule, MutationRuleKind, CTAPosition, ImagePlacement, CopyTone, AudienceSegment, RetentionStrategy};
 use super::super::graph::{Graph, NodeId};
 use super::super::error::NtgError;
 use super::ledger::MutationLedger;
@@ -382,6 +382,162 @@ impl AdaptiveMutationProposer {
             kind: MutationRuleKind::AddNode { label },
         })
     }
+
+    /// Propose a web design mutation based on degradation signal.
+    pub fn propose_web_design_mutation(
+        &self,
+        signal: DegradationSignal,
+        index: usize,
+    ) -> Result<MutationRule, NtgError> {
+        // Map degradation signals to web design improvements:
+        // LatencyDominant -> faster interactions (simplify, reduce form fields)
+        // MemoryDominant -> reduce visual load (adjust whitespace, hide images)
+        // Balanced -> improve overall UX (adjust colors, reorder CTA)
+
+        let mutation_kind = match signal {
+            DegradationSignal::LatencyDominant => {
+                if index % 2 == 0 {
+                    MutationRuleKind::SimplifyLayout {
+                        target_elements: 5 + (index % 3) as usize,
+                    }
+                } else {
+                    MutationRuleKind::ChangeFormFields {
+                        num_fields: 3 + (index % 2),
+                    }
+                }
+            }
+            DegradationSignal::MemoryDominant => {
+                if index % 3 == 0 {
+                    MutationRuleKind::AdjustWhitespace {
+                        spacing_ratio: 1.2 + ((index % 3) as f32 * 0.1),
+                    }
+                } else if index % 3 == 1 {
+                    MutationRuleKind::ModifyImagePlacement {
+                        placement: if index % 2 == 0 {
+                            ImagePlacement::Hidden
+                        } else {
+                            ImagePlacement::FullWidth
+                        },
+                    }
+                } else {
+                    MutationRuleKind::AdjustTypographyHierarchy {
+                        emphasis_level: (index % 5 + 1) as u8,
+                    }
+                }
+            }
+            DegradationSignal::Balanced => {
+                match index % 4 {
+                    0 => MutationRuleKind::AdjustColorContrast {
+                        increase: index % 2 == 0,
+                    },
+                    1 => MutationRuleKind::ReorderCTA {
+                        position: match index % 4 {
+                            0 => CTAPosition::AboveFold,
+                            1 => CTAPosition::BelowFold,
+                            2 => CTAPosition::FloatingCorner,
+                            _ => CTAPosition::Inline,
+                        },
+                    },
+                    2 => MutationRuleKind::SimplifyLayout {
+                        target_elements: 7 + (index % 4) as usize,
+                    },
+                    _ => MutationRuleKind::AdjustTypographyHierarchy {
+                        emphasis_level: (index % 5 + 1) as u8,
+                    },
+                }
+            }
+        };
+
+        Ok(MutationRule { kind: mutation_kind })
+    }
+
+    /// Propose a marketing mutation based on degradation signal.
+    pub fn propose_marketing_mutation(
+        &self,
+        signal: DegradationSignal,
+        index: usize,
+    ) -> Result<MutationRule, NtgError> {
+        // Map degradation signals to marketing improvements:
+        // LatencyDominant -> focus on speed, urgency messaging
+        // MemoryDominant -> reduce complexity, simpler audience targeting
+        // Balanced -> comprehensive message and channel optimization
+
+        let mutation_kind = match signal {
+            DegradationSignal::LatencyDominant => {
+                if index % 2 == 0 {
+                    MutationRuleKind::AdjustCopyTone {
+                        tone: CopyTone::Urgent,
+                    }
+                } else {
+                    MutationRuleKind::RefocusValueProposition {
+                        focus_area: "speed".to_string(),
+                    }
+                }
+            }
+            DegradationSignal::MemoryDominant => {
+                if index % 3 == 0 {
+                    MutationRuleKind::ChangeTargetAudience {
+                        segment: match index % 3 {
+                            0 => AudienceSegment::Individual,
+                            1 => AudienceSegment::SMB,
+                            _ => AudienceSegment::Startup,
+                        },
+                    }
+                } else {
+                    MutationRuleKind::RefocusValueProposition {
+                        focus_area: "simplicity".to_string(),
+                    }
+                }
+            }
+            DegradationSignal::Balanced => {
+                match index % 5 {
+                    0 => MutationRuleKind::AdjustCopyTone {
+                        tone: match index % 5 {
+                            0 => CopyTone::Authoritative,
+                            1 => CopyTone::Relateable,
+                            2 => CopyTone::Urgent,
+                            3 => CopyTone::Educational,
+                            _ => CopyTone::Playful,
+                        },
+                    },
+                    1 => MutationRuleKind::RefocusValueProposition {
+                        focus_area: match index % 4 {
+                            0 => "cost_savings".to_string(),
+                            1 => "quality".to_string(),
+                            2 => "speed".to_string(),
+                            _ => "reliability".to_string(),
+                        },
+                    },
+                    2 => MutationRuleKind::ChangeTargetAudience {
+                        segment: match index % 4 {
+                            0 => AudienceSegment::Enterprise,
+                            1 => AudienceSegment::SMB,
+                            2 => AudienceSegment::Startup,
+                            _ => AudienceSegment::Individual,
+                        },
+                    },
+                    3 => MutationRuleKind::ShiftChannelMix {
+                        primary_channel: match index % 3 {
+                            0 => "email".to_string(),
+                            1 => "paid_ads".to_string(),
+                            _ => "organic".to_string(),
+                        },
+                    },
+                    _ => MutationRuleKind::AdjustRetentionStrategy {
+                        strategy: match index % 5 {
+                            0 => RetentionStrategy::Gamification,
+                            1 => RetentionStrategy::EmailNurture,
+                            2 => RetentionStrategy::CommunityBuilding,
+                            3 => RetentionStrategy::PremiumContent,
+                            _ => RetentionStrategy::PersonalizedRecommendations,
+                        },
+                    },
+                }
+            }
+        };
+
+        Ok(MutationRule { kind: mutation_kind })
+    }
 }
 
 #[cfg(test)]
@@ -568,6 +724,132 @@ mod tests {
 
         // With ledger confidence bonus, should shift toward exploitation
         assert_eq!(mutations.len(), 1);
+        Ok(())
+    }
+
+    // Web Design and Marketing mutation tests (Phase 6.7)
+    #[test]
+    fn proposer_propose_web_design_latency_dominant() -> Result<(), NtgError> {
+        let proposer = AdaptiveMutationProposer::new();
+        let mutation = proposer.propose_web_design_mutation(DegradationSignal::LatencyDominant, 0)?;
+
+        // Should propose SimplifyLayout or ChangeFormFields for latency
+        match &mutation.kind {
+            MutationRuleKind::SimplifyLayout { .. } | MutationRuleKind::ChangeFormFields { .. } => {
+                Ok(())
+            }
+            _ => Err(NtgError::InvalidInput(
+                "Expected SimplifyLayout or ChangeFormFields".to_string(),
+            )),
+        }
+    }
+
+    #[test]
+    fn proposer_propose_web_design_memory_dominant() -> Result<(), NtgError> {
+        let proposer = AdaptiveMutationProposer::new();
+        let mutation = proposer.propose_web_design_mutation(DegradationSignal::MemoryDominant, 0)?;
+
+        // Should propose whitespace, image placement, or typography adjustments
+        match &mutation.kind {
+            MutationRuleKind::AdjustWhitespace { .. }
+            | MutationRuleKind::ModifyImagePlacement { .. }
+            | MutationRuleKind::AdjustTypographyHierarchy { .. } => Ok(()),
+            _ => Err(NtgError::InvalidInput(
+                "Expected whitespace/image/typography mutation".to_string(),
+            )),
+        }
+    }
+
+    #[test]
+    fn proposer_propose_web_design_balanced() -> Result<(), NtgError> {
+        let proposer = AdaptiveMutationProposer::new();
+        let mutation = proposer.propose_web_design_mutation(DegradationSignal::Balanced, 0)?;
+
+        // Should propose one of several design mutations for balanced improvement
+        match &mutation.kind {
+            MutationRuleKind::AdjustColorContrast { .. }
+            | MutationRuleKind::ReorderCTA { .. }
+            | MutationRuleKind::SimplifyLayout { .. }
+            | MutationRuleKind::AdjustTypographyHierarchy { .. } => Ok(()),
+            _ => Err(NtgError::InvalidInput("Expected balanced design mutation".to_string())),
+        }
+    }
+
+    #[test]
+    fn proposer_propose_marketing_latency_dominant() -> Result<(), NtgError> {
+        let proposer = AdaptiveMutationProposer::new();
+        let mutation = proposer.propose_marketing_mutation(DegradationSignal::LatencyDominant, 0)?;
+
+        // Should propose Urgent tone or speed-focused value proposition
+        match &mutation.kind {
+            MutationRuleKind::AdjustCopyTone { tone: CopyTone::Urgent }
+            | MutationRuleKind::RefocusValueProposition { .. } => Ok(()),
+            _ => Err(NtgError::InvalidInput(
+                "Expected Urgent tone or speed proposition".to_string(),
+            )),
+        }
+    }
+
+    #[test]
+    fn proposer_propose_marketing_memory_dominant() -> Result<(), NtgError> {
+        let proposer = AdaptiveMutationProposer::new();
+        let mutation = proposer.propose_marketing_mutation(DegradationSignal::MemoryDominant, 0)?;
+
+        // Should propose audience targeting or simplicity focus
+        match &mutation.kind {
+            MutationRuleKind::ChangeTargetAudience { .. }
+            | MutationRuleKind::RefocusValueProposition { .. } => Ok(()),
+            _ => Err(NtgError::InvalidInput(
+                "Expected audience or simplicity mutation".to_string(),
+            )),
+        }
+    }
+
+    #[test]
+    fn proposer_propose_marketing_balanced() -> Result<(), NtgError> {
+        let proposer = AdaptiveMutationProposer::new();
+        let mutation = proposer.propose_marketing_mutation(DegradationSignal::Balanced, 0)?;
+
+        // Should propose one of several marketing mutations for balanced improvement
+        match &mutation.kind {
+            MutationRuleKind::AdjustCopyTone { .. }
+            | MutationRuleKind::RefocusValueProposition { .. }
+            | MutationRuleKind::ChangeTargetAudience { .. }
+            | MutationRuleKind::ShiftChannelMix { .. }
+            | MutationRuleKind::AdjustRetentionStrategy { .. } => Ok(()),
+            _ => Err(NtgError::InvalidInput("Expected balanced marketing mutation".to_string())),
+        }
+    }
+
+    #[test]
+    fn proposer_proposes_varied_web_design_mutations() -> Result<(), NtgError> {
+        let proposer = AdaptiveMutationProposer::new();
+
+        // Propose multiple mutations with different indices to test variety
+        let mut kinds = std::collections::HashSet::new();
+        for i in 0..10 {
+            let mutation = proposer.propose_web_design_mutation(DegradationSignal::Balanced, i)?;
+            kinds.insert(format!("{:?}", mutation.kind));
+        }
+
+        // Should see multiple different mutation types
+        assert!(kinds.len() > 1, "Should propose varied design mutations");
+        Ok(())
+    }
+
+    #[test]
+    fn proposer_proposes_varied_marketing_mutations() -> Result<(), NtgError> {
+        let proposer = AdaptiveMutationProposer::new();
+
+        // Propose multiple mutations with different indices to test variety
+        let mut kinds = std::collections::HashSet::new();
+        for i in 0..10 {
+            let mutation = proposer.propose_marketing_mutation(DegradationSignal::Balanced, i)?;
+            kinds.insert(format!("{:?}", mutation.kind));
+        }
+
+        // Should see multiple different mutation types
+        assert!(kinds.len() > 1, "Should propose varied marketing mutations");
         Ok(())
     }
 }
