@@ -11,6 +11,7 @@
 
 pub mod ntg;
 pub mod genomic;
+pub mod health;
 
 pub use genomic::{
     VcfParser, VcfChromosome, BitstreamGenotypes, LdComputer, LdMatrix, LdPair, BlockDetector,
@@ -46,6 +47,7 @@ pub use ntg::storage::{BitSlicedBlock, BitSlicedTernary, SparseBitSlicedTernary}
 pub use ntg::ternary::{encode, encode_fixed, matmul_scalar, Ternary};
 pub use ntg::observability::{StatsCollector, StatsSnapshot};
 pub use ntg::genome::{DNAGraphNode, GenomeDelta, propose_density_delta};
+pub use health::{HealthMonitor, TrendSignal, PerformanceSnapshot};
 
 /// Reports whether this build has a working ternary compute path.
 pub fn has_ternary_kernel() -> bool {

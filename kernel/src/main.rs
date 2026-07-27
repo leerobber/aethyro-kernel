@@ -22,6 +22,7 @@ use ntg_kernel::ntg::calib::{calibrate, fixture_documents, samples_from_document
 use ntg_kernel::ntg::ledger::{FitnessMeasure, MutationOutcome, TamperEvidentLedger};
 use ntg_kernel::ntg::ledger::replay::ExecutionTrace;
 use ntg_kernel::ntg::graph::IntentMemory;
+use ntg_kernel::{HealthMonitor, TrendSignal};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
@@ -87,6 +88,8 @@ struct NanoKeymaster {
     /// Ternary Memory Graph: intent hypervectors + Hebbian edge learning.
     /// Enables semantic similarity routing and structural forgetting.
     tmg_memory: IntentMemory,
+    /// Health monitor: detects degradation and triggers self-healing.
+    health_monitor: HealthMonitor,
     /// External backend URL, if configured. Credential vault.
     external_url: Option<String>,
     call_counter: u64,
@@ -98,6 +101,7 @@ impl NanoKeymaster {
             ledger: TamperEvidentLedger::new(None).expect("ledger init"),
             memory: HashMap::new(),
             tmg_memory: IntentMemory::new(),
+            health_monitor: HealthMonitor::new(100, 1_000_000), // 100 µs baseline, 1MB baseline memory
             external_url,
             call_counter: 0,
             model,
@@ -168,16 +172,29 @@ impl NanoKeymaster {
         // TMG: fire-together-wire-together on similarity edges (Hebbian learning).
         self.tmg_memory.observe_call(intent, &similar_names);
 
-        // 6. Periodically prune stale edges and emit learning updates.
+        // 6. Health monitoring: track latency, detect degradation, trigger healing.
+        self.health_monitor.sample(elapsed_us, 1_000_000); // Mock memory for now
+
+        if self.health_monitor.should_trigger_healing() {
+            self.heal_topology();
+        }
+
+        // 7. Periodically prune stale edges and emit learning updates.
         if call_id.is_multiple_of(10) {
             let pruned = self.tmg_memory.prune_stale_edges();
             if !pruned.is_empty() {
                 eprintln!("[tmg:pruning] stale edges removed: {:?}", pruned);
             }
             self.emit_learning_update();
+
+            // Also check health trend
+            if self.health_monitor.efficiency_trend() == TrendSignal::Degrading {
+                eprintln!("[health] system degrading: efficiency trend negative");
+            }
         }
 
         let (tmg_intents, tmg_edges) = self.tmg_memory.stats();
+
         json!({
             "call_id": call_id,
             "backend": backend.label(),
@@ -189,12 +206,22 @@ impl NanoKeymaster {
             "tmg_stats": {
                 "intents": tmg_intents,
                 "edges": tmg_edges,
+            },
+            "health": {
+                "efficiency": self.health_monitor.current_efficiency(),
+                "conservative_mode": self.health_monitor.in_conservative_mode,
             }
         })
     }
 
     /// Routing brain: maps intent + confidence score to a backend.
+    /// In conservative mode, all requests route locally (graceful degradation).
     fn route(&self, intent: &str, score: i64) -> Backend {
+        // Conservative mode: all local (system under stress)
+        if self.health_monitor.in_conservative_mode {
+            return Backend::Local;
+        }
+
         match intent {
             // Core kernel intents: handle locally if confident.
             "classify" | "score" | "predict" => {
@@ -279,6 +306,12 @@ impl NanoKeymaster {
             "tmg_memory": {
                 "intents": tmg_intents,
                 "edges": tmg_edges,
+            },
+            "health": {
+                "efficiency": format!("{:.2}%", self.health_monitor.current_efficiency() * 100.0),
+                "trend": format!("{:?}", self.health_monitor.efficiency_trend()),
+                "conservative_mode": self.health_monitor.in_conservative_mode,
+                "should_heal": self.health_monitor.should_trigger_healing(),
             }
         })
     }
@@ -307,6 +340,33 @@ impl NanoKeymaster {
                 eprintln!("{}", obs);
             }
         }
+    }
+
+    /// Self-healing: detect degradation and take corrective actions.
+    /// Triggered when efficiency drops below baseline.
+    fn heal_topology(&mut self) {
+        let trend = self.health_monitor.efficiency_trend();
+        eprintln!("[health:healing] triggered — trend: {:?}", trend);
+
+        // Action 1: Prune weak edges below 0.15 threshold
+        eprintln!("[health:healing] pruning weak edges (threshold < 0.15)");
+        let pruned = self.tmg_memory.prune_stale_edges();
+        if !pruned.is_empty() {
+            eprintln!("[health:healing] pruned {} stale edges", pruned.len());
+        }
+
+        // Action 2: Check if we should enter conservative mode (both latency & memory high)
+        if self.health_monitor.should_enter_conservative_mode() {
+            self.health_monitor.set_conservative_mode(true);
+            eprintln!(
+                "[health:healing] CONSERVATIVE MODE enabled — all requests route local"
+            );
+        }
+
+        eprintln!(
+            "[health:healing] system health after intervention: efficiency={:.2}%",
+            self.health_monitor.current_efficiency() * 100.0
+        );
     }
 }
 
