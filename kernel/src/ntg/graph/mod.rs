@@ -13,10 +13,12 @@
 pub mod node;
 pub mod hypervector;
 pub mod forget;
+pub mod router;
 
 pub use node::GraphNode;
 pub use hypervector::HyperVector;
 pub use forget::ForgetEngine;
+pub use router::IntentMemory;
 
 use std::cmp::Reverse;
 use std::collections::hash_map::DefaultHasher;

@@ -21,6 +21,7 @@
 use ntg_kernel::ntg::calib::{calibrate, fixture_documents, samples_from_documents, CalibModel};
 use ntg_kernel::ntg::ledger::{FitnessMeasure, MutationOutcome, TamperEvidentLedger};
 use ntg_kernel::ntg::ledger::replay::ExecutionTrace;
+use ntg_kernel::ntg::graph::IntentMemory;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
@@ -81,8 +82,11 @@ impl IntentStats {
 struct NanoKeymaster {
     model: CalibModel,
     ledger: TamperEvidentLedger,
-    /// Per-intent call statistics (the memory layer).
+    /// Per-intent call statistics (parametric memory layer).
     memory: HashMap<String, IntentStats>,
+    /// Ternary Memory Graph: intent hypervectors + Hebbian edge learning.
+    /// Enables semantic similarity routing and structural forgetting.
+    tmg_memory: IntentMemory,
     /// External backend URL, if configured. Credential vault.
     external_url: Option<String>,
     call_counter: u64,
@@ -93,6 +97,7 @@ impl NanoKeymaster {
         Self {
             ledger: TamperEvidentLedger::new(None).expect("ledger init"),
             memory: HashMap::new(),
+            tmg_memory: IntentMemory::new(),
             external_url,
             call_counter: 0,
             model,
@@ -100,7 +105,7 @@ impl NanoKeymaster {
     }
 
     /// The outer interface. Every call goes through:
-    /// policy → route → act → log → update memory → respond.
+    /// policy → route → act → log → update memory (parametric + structural) → respond.
     fn call(&mut self, intent: &str, payload: &Value, _context: &Value) -> Value {
         self.call_counter += 1;
         let call_id = self.call_counter;
@@ -111,8 +116,14 @@ impl NanoKeymaster {
         let raw_score = self.model.score_label(&text);
         let confidence = normalize_confidence(raw_score, self.model.threshold);
 
-        // 2. Routing brain: decide where this call goes.
+        // 2. Routing brain: decide where this call goes (with TMG similarity suggestions).
         let backend = self.route(intent, raw_score);
+        let similar_intents = self.tmg_memory.find_similar(intent, 3);
+        let similar_names: Vec<&str> = similar_intents
+            .iter()
+            .take(2)
+            .map(|(name, _)| name.as_str())
+            .collect();
 
         // 3. Act: execute against chosen backend.
         let result = self.execute(intent, payload, &text, raw_score, &backend);
@@ -144,7 +155,7 @@ impl NanoKeymaster {
             call_id,
         );
 
-        // 5. Update memory.
+        // 5. Update memory: both parametric (stats) and structural (TMG).
         let stats = self.memory.entry(intent.to_string()).or_default();
         stats.calls += 1;
         stats.sum_raw_score += raw_score;
@@ -154,11 +165,19 @@ impl NanoKeymaster {
             Backend::External => {}
         }
 
-        // 6. Evolution hint: after every 10 calls, emit routing policy observations.
+        // TMG: fire-together-wire-together on similarity edges (Hebbian learning).
+        self.tmg_memory.observe_call(intent, &similar_names);
+
+        // 6. Periodically prune stale edges and emit learning updates.
         if call_id.is_multiple_of(10) {
+            let pruned = self.tmg_memory.prune_stale_edges();
+            if !pruned.is_empty() {
+                eprintln!("[tmg:pruning] stale edges removed: {:?}", pruned);
+            }
             self.emit_learning_update();
         }
 
+        let (tmg_intents, tmg_edges) = self.tmg_memory.stats();
         json!({
             "call_id": call_id,
             "backend": backend.label(),
@@ -166,6 +185,11 @@ impl NanoKeymaster {
             "score_raw": raw_score,
             "latency_us": elapsed_us,
             "result": result,
+            "tmg_similar": similar_intents,
+            "tmg_stats": {
+                "intents": tmg_intents,
+                "edges": tmg_edges,
+            }
         })
     }
 
@@ -244,6 +268,7 @@ impl NanoKeymaster {
                 }),
             );
         }
+        let (tmg_intents, tmg_edges) = self.tmg_memory.stats();
         json!({
             "total_calls": self.call_counter,
             "ledger_entries": self.ledger.len(),
@@ -251,6 +276,10 @@ impl NanoKeymaster {
             "model_threshold": self.model.threshold,
             "external_backend": self.external_url,
             "intent_memory": intent_memory,
+            "tmg_memory": {
+                "intents": tmg_intents,
+                "edges": tmg_edges,
+            }
         })
     }
 
