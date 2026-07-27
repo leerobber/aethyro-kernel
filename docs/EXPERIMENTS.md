@@ -517,3 +517,44 @@ graph≈0.20 µs  static≈0.02 µs  ratio≈10×  (same character as Phase 2)
 `--self-mod`: AddNode proposed, rejected by fitness, ledgered.
 
 **Phase 5 exit criteria:** met — see `docs/phases/PHASE_5_COMPLETE.md`.
+
+## 2026-07-26 cleanup + release-profile pass
+
+### `[profile.release]` lto + codegen-units=1
+
+Added `lto = true`, `codegen-units = 1` to `kernel/Cargo.toml` (previously
+unset -> Cargo defaults of no LTO, 16 codegen units). Measured
+`density_bench` before/after, same host, same command, median of 200 iters:
+
+| density | scalar µs (before → after) | bit-sliced µs (before → after) | sparse µs (before → after) |
+|--------:|:---------------------------:|:-------------------------------:|:----------------------------:|
+| 1% | 94.13 → 88.10 (-6.4%) | 13.20 → 12.38 (-6.2%) | 6.12 → 6.46 (+5.6%, noise-level) |
+| 10% | 92.33 → 87.27 (-5.5%) | 12.74 → 12.39 (-2.7%) | 20.80 → 20.86 (~flat) |
+| 50% | 92.39 → 88.27 (-4.5%) | 13.17 → 12.37 (-6.1%) | 28.20 → 20.91 (-25.8%) |
+
+`graph_overhead_bench` unchanged in character (graph≈0.20µs, static≈0.03µs,
+ratio≈6×; the earlier ≈10× figure and this run differ mainly by measurement
+noise on a small 8-node sample, not a regression). Full `cargo test` (338
+tests) and `cargo clippy -- -D warnings` stayed green. Release build time
+rose from ~10s to ~46s (LTO cost) -- acceptable, release builds aren't the
+inner dev loop. Real, measured, small win; not claimed as more than that.
+
+### Dead-code / scope cleanup
+
+The repo previously carried the entire pre-pivot genomics research tree
+despite the README claiming a "clean kernel-only extract" (untrue -- see
+git history before this commit). Traced actual `use` dependencies rather
+than trusting the doc: `ntg::mutation::multi_axis` (Rung 2 fitness)
+genuinely depends on `genomic::sovereign_brain`, so that chain (14 files)
+was kept. Everything else in `genomic/` -- `agents.rs`, `domain_agents.rs`,
+`evolution.rs`, `phenotype.rs`, `report_gen.rs`, `quality_control.rs`,
+`extended_validation.rs`, `optimized_core.rs`, `epigenetic_engine.rs`,
+`vitascale/` -- had zero reachability from the kernel or from CI and was
+deleted, along with the 10 `bin/` demos that exclusively exercised it
+(`chromosome_brain_test`, `domain_disease_{complete,test}`,
+`phase_{c_synthesis,d_quality_control,e_extended_validation}`,
+`optimized_core_demo`, `system_evolution_node`, `kairos_stage{0,1}`).
+Test count dropped 401 → 338 (the difference is exactly the deleted
+modules' own unit tests, not a coverage loss on kept code). `cargo build
+--lib --bins --tests --benches` and `cargo clippy --all-targets` both zero
+warnings after the cut, not just zero errors.

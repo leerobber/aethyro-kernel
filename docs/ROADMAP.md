@@ -1,6 +1,6 @@
 # Aethyro NTG Engine — build roadmap
 
-**Live status snapshot:** [STATUS.md](STATUS.md) (2026-07-09 audit).  
+**Live status snapshot:** [STATUS.md](STATUS.md) (2026-07-26 audit).  
 This file is the phase checklist; STATUS is the research-agency report.
 
 See [DESIGN.md](DESIGN.md) for the architecture these phases build, and
@@ -13,8 +13,9 @@ before starting the next phase. No exceptions, no "we'll fix the tests
 later." A phase that isn't green isn't done, regardless of how much code
 exists for it.
 
-**Test baseline (2026-07-09):** 200+ automated tests green (`cargo test`
-in `kernel/`). Capability report version **10** (Phase 5 optimization complete).
+**Test baseline (2026-07-26):** 338 automated tests green (305 unit + 33
+integration, `cargo test` in `kernel/`). `cargo clippy -- -D warnings`
+clean. Capability report version **10** (Phase 5 optimization complete).
 
 ### Phase gate policy (binding — 2026-07-09)
 
@@ -23,8 +24,8 @@ See **[PHASE_GATE_PROTOCOL.md](PHASE_GATE_PROTOCOL.md)**.
 | Gate | Verdict |
 |------|---------|
 | Soft advance without certificates | **REJECTED** |
-| Phases 0–3 COMPLETE certificates | **YES** — `docs/phases/PHASE_{0,1,2,3}_COMPLETE.md` |
-| Phase 4 may begin | **YES** (only after certificates + green tests; still implement Phase 4 as its own gated phase) |
+| Phases 0–5 COMPLETE certificates | **YES** — `docs/phases/PHASE_{0,1,2,3,4,5}_COMPLETE.md` |
+| Phase 6 may begin | **YES** (see [PHASE_5_COMPLETE.md](phases/PHASE_5_COMPLETE.md) sign-off) |
 
 ---
 
