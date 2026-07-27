@@ -6,10 +6,11 @@
 //! - Evaluate under budget constraints
 //! - Accept/reject based on fitness improvement
 //! - Log all events to the tamper-evident ledger
+//! - Record every mutation to build domain expertise
 
 use super::super::graph::Graph;
 use super::super::error::NtgError;
-use super::{MutationCycle, SelfModConfig, AdaptiveMutationProposer, DegradationSignal};
+use super::{MutationCycle, SelfModConfig, AdaptiveMutationProposer, DegradationSignal, MutationLedger};
 
 /// Outcome of a self-improvement cycle.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -62,6 +63,8 @@ pub struct LoopController {
     pub cycle_count: u64,
     /// Efficiency baseline (for measuring improvement).
     pub efficiency_baseline: f64,
+    /// Tamper-evident ledger: records every mutation for learning and analysis.
+    pub ledger: MutationLedger,
 }
 
 impl LoopController {
@@ -71,6 +74,7 @@ impl LoopController {
             proposer: AdaptiveMutationProposer::new(),
             cycle_count: 0,
             efficiency_baseline: 1.0,
+            ledger: MutationLedger::new(),
         }
     }
 
@@ -133,7 +137,8 @@ impl LoopController {
             ).min(1.0) * 0.2;
 
             // Step 5: Decide acceptance.
-            if cycle.should_accept(new_fitness) && new_efficiency > best_efficiency {
+            let was_accepted = cycle.should_accept(new_fitness) && new_efficiency > best_efficiency;
+            if was_accepted {
                 // Accept this mutation.
                 cycle.accept_mutation(idx)?;
                 stats.mutations_accepted += 1;
@@ -144,10 +149,21 @@ impl LoopController {
                 best_efficiency = new_efficiency;
             }
 
+            // Record this mutation event in the ledger for learning
+            self.ledger.record_mutation(
+                proposal.kind.clone(),
+                signal,
+                current_efficiency,
+                new_efficiency,
+                was_accepted,
+                self.proposer.accept_rate,
+            );
+
             // Check budget.
             if !cycle.within_budget() {
                 stats.outcome = LoopOutcome::BudgetExhausted;
                 stats.final_efficiency = best_efficiency;
+                self.ledger.next_cycle();
                 return Ok((best_graph, stats));
             }
         }
@@ -170,7 +186,15 @@ impl LoopController {
             LoopOutcome::NoAction
         };
 
+        // Step 8: Advance ledger to next cycle
+        self.ledger.next_cycle();
+
         Ok((best_graph, stats))
+    }
+
+    /// Get the current learning report from the mutation ledger
+    pub fn learning_report(&self) -> String {
+        self.ledger.report()
     }
 }
 

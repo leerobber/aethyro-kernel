@@ -406,6 +406,12 @@ impl NanoKeymaster {
                         // For now, the improved_graph snapshot represents the optimized topology.
                         // A future phase would implement durability by persisting these mutations.
                     }
+
+                    // Display learned knowledge from mutation ledger (periodic summary)
+                    if self.improvement_loop.cycle_count % 5 == 0 {
+                        eprintln!("[improvement:loop] === LEARNING REPORT (Cycle {}) ===", self.improvement_loop.cycle_count);
+                        eprintln!("{}", self.improvement_loop.learning_report());
+                    }
                 }
                 Err(e) => {
                     eprintln!("[improvement:loop] cycle failed: {}", e);
